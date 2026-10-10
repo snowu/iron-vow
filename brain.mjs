@@ -101,7 +101,7 @@ export const fencingQuestions = {
   tactic: {
     type: "choice",
     instructions:
-      "Choose an épée fencer's proactive intention on a narrow piste. Score a single point with a thrust. A lunge closes about one metre but commits recovery. Draw and punish misses; no passive block, slashes, grabs, damage or right-of-way. Both can score near-simultaneously.",
+      "Choose an épée fencer's proactive intention on a narrow piste. Use the recent observed actions, lines, results and distance in habits to exploit this opponent: feint against repeated parries, beat a presented blade, draw a committed lunge then punish its recovery. Vary a failed plan instead of repeating straight thrusts. Thrust reaches about 2m, lunge about 3m. Prefer a single touch; counterattacking into an extension risks a double. No passive block, slashes, grabs or right-of-way.",
     criteria: {
       light: "Quick straight thrust at close distance",
       heavy: "Committed long lunge",
@@ -114,7 +114,7 @@ export const fencingQuestions = {
   attack_direction: {
     type: "choice",
     instructions:
-      "Choose an épée blade line. Vary predictable lines to evade matching parries.",
+      "Choose an épée blade line using recently observed opponent parry lines in habits. Attack a different line from the opponent's repeated parry. For a compound feint attack this also chooses the line used to disengage around a committed matching parry.",
     criteria: {
       top: "High line toward mask",
       left: "Inside line toward torso",
@@ -134,7 +134,7 @@ export const fencingQuestions = {
   movement: {
     type: "choice",
     instructions:
-      "Choose fencing footwork on a straight piste, no circling. Thrust reach about two metres; lunge reaches about three. Retreat when exhausted or baiting; advance when too far to attack.",
+      "Choose fencing footwork on a straight piste, no circling. Use exact distance and recent actions in habits. Thrust reach about two metres; lunge reaches about three. Draw a lunge by giving ground, then close for a riposte during recovery. Hold near the edge of reach when baiting instead of always closing to body distance; take space after a retreat or short attack. Retreat when exhausted.",
     criteria: {
       advance: "Advance toward opponent",
       retreat: "Retreat to open distance",
@@ -179,7 +179,7 @@ export const fencingQuestions = {
   on_opening: {
     type: "choice",
     instructions:
-      "After a successful parry, choose a riposte. A quick thrust fits the opening. A lunge is useful if the opponent recovered distance.",
+      "Choose how to exploit a successful parry, displaced blade, or opponent's missed attack in recovery. A quick thrust fits a close opening; lunge if the opponent recovered distance. Recover only when tired or outside useful reach. This cached choice executes immediately when an opening is observed, without waiting for another request.",
     criteria: {
       light: "Immediate thrust riposte",
       heavy: "Lunge riposte",
@@ -189,7 +189,7 @@ export const fencingQuestions = {
   after_feint: {
     type: "choice",
     instructions:
-      "Follow a false preparation with a new blade line or draw the counter. A beat prepares the next thrust.",
+      "Choose the second intention after a false preparation. Against a drawn parry, thrust in another line and disengage around a matching parry. Against a retreat, commit a lunge to catch recovery. Against counterthrusts, draw and parry the counter. A beat prepares the next thrust. Use observed opponent reactions in habits, rather than repeating the same unsuccessful preparation.",
     criteria: {
       guardbreak: "Beat the blade",
       light: "Quick thrust in a different line",

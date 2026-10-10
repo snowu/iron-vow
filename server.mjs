@@ -22,7 +22,7 @@ const mime = {
   ".svg": "image/svg+xml",
 };
 let active = 0,
-  last = 0;
+  admissions = [];
 const server = http.createServer(async (req, res) => {
   if (req.url === "/api/health") {
     res.setHeader("Content-Type", "application/json");
@@ -37,13 +37,17 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.url === "/api/decision" && req.method === "POST") {
     res.setHeader("Content-Type", "application/json");
-    if (active >= 2 || Date.now() - last < 200) {
+    const now = Date.now();
+    admissions = admissions.filter((time) => now - time < 200);
+    if (active >= 2 || admissions.length >= 2) {
       res.writeHead(429);
       res.end(JSON.stringify({ error: "Decision already pending" }));
       return;
     }
+    // Admit a two-brain burst before reading bodies, so neither color is rejected.
+    active++;
+    admissions.push(now);
     let raw = "";
-    let counted = false;
     try {
       for await (const chunk of req) {
         raw += chunk;
@@ -51,9 +55,6 @@ const server = http.createServer(async (req, res) => {
       }
       const state = JSON.parse(raw);
       if (!personas[state.persona]) throw Error("Invalid persona");
-      active++;
-      counted = true;
-      last = Date.now();
       const decision = await ask(
         { ...state, personality: personas[state.persona] },
         process.env.TYPESAFE_API_KEY,
@@ -63,7 +64,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(503);
       res.end(JSON.stringify({ error: e.message }));
     } finally {
-      if (counted) active--;
+      active--;
     }
     return;
   }

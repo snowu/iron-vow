@@ -1,9 +1,9 @@
-import { command, feint, lines, MOVES } from "./fencing.js";
-function weighted(distribution) {
+import { command, feint, disengage, lines, MOVES } from "./fencing.js";
+function weighted(distribution, random) {
   const entries = Object.entries(distribution || {}).filter(
     ([, p]) => Number.isFinite(p) && p > 0,
   );
-  let roll = Math.random() * entries.reduce((sum, [, p]) => sum + p, 0);
+  let roll = random() * entries.reduce((sum, [, p]) => sum + p, 0);
   for (const [choice, p] of entries) if ((roll -= p) <= 0) return choice;
   return null;
 }
@@ -12,11 +12,16 @@ export const names = {
   raider: "THE PRESSER",
   duelist: "THE COUNTERFENCER",
 };
-export function fencingController(persona) {
+export function fencingController(persona, history = [], random = Math.random) {
   return {
     persona,
+    history: history.slice(-12),
+    random,
+    observed: null,
+    compound: false,
+    openingSeen: -1,
     time: 0,
-    cooldown: 0.45,
+    cooldown: 0.32 + random() * 0.18,
     seen: 0,
     response: null,
     feint: false,
@@ -26,12 +31,32 @@ export function fencingController(persona) {
     feintedLine: null,
   };
 }
+// Both brains see the same instant, even though commands are applied in sequence.
+export function stepFencingPair(controllers, fencers, decisions, dt) {
+  const observed = fencers.map((f) => ({ ...f }));
+  return fencers.map((self, i) =>
+    stepFencingAI(controllers[i], self, observed[1 - i], decisions[i], dt),
+  );
+}
 const lineMap = { top: "high", left: "inside", right: "outside" };
 export function stepFencingAI(c, self, foe, decision, dt) {
   c.time += dt;
   c.cooldown = Math.max(0, c.cooldown - dt);
   const distance = Math.abs(self.x - foe.x),
-    pick = (key) => weighted(decision?.probabilities?.[key]) || decision?.[key];
+    pick = (key) =>
+      weighted(decision?.probabilities?.[key], c.random) || decision?.[key];
+  const observation = `${foe.serial}:${foe.action}:${foe.attackLine}`;
+  if (observation !== c.observed) {
+    c.observed = observation;
+    if (["thrust", "lunge", "beat", "parry", "retreat"].includes(foe.action)) {
+      c.history.push(
+        `opponent: ${foe.action} in ${foe.action === "parry" ? foe.line : foe.attackLine} line`,
+      );
+    } else if (foe.action === "recover" && foe.feinted) {
+      c.history.push("opponent: cancelled preparation as a feint");
+    }
+    c.history = c.history.slice(-12);
+  }
   if (c.time > c.followupUntil) c.followup = null;
   if (
     foe.serial !== c.seen &&
@@ -55,12 +80,14 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   if (c.response && c.time >= c.response.at) {
     const r = c.response;
     c.response = null;
+    let responded = false;
     if (["parry", "block"].includes(r.reaction)) {
       self.line = r.line;
-      command(self, "parry");
-    } else if (r.reaction === "dodge") command(self, "retreat");
-    else if (r.reaction === "interrupt") command(self, "thrust");
-    c.cooldown = 0.12;
+      responded = command(self, "parry");
+    } else if (r.reaction === "dodge") responded = command(self, "retreat");
+    else if (r.reaction === "interrupt") responded = command(self, "thrust");
+    else if (r.reaction === "counter") responded = command(self, "beat");
+    if (responded) c.cooldown = 0.12;
   }
   if (c.feint && self.action === "lunge" && self.elapsed >= 0.045) {
     c.feintedLine = self.attackLine;
@@ -69,6 +96,21 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.cooldown = 0.075;
     c.followup = pick("after_feint") || "light";
     c.followupUntil = c.time + 1;
+    c.history.push(`self: feint in ${c.feintedLine}, preparing ${c.followup}`);
+    c.history = c.history.slice(-12);
+  }
+  if (
+    c.compound &&
+    ["thrust", "lunge"].includes(self.action) &&
+    foe.action === "parry" &&
+    foe.line === self.attackLine &&
+    self.elapsed >= 0.035 &&
+    self.elapsed <= 0.17 &&
+    !self.connected
+  ) {
+    const next = lineMap[pick("attack_direction")];
+    if (disengage(self, next && next !== self.attackLine ? next : null))
+      c.compound = false;
   }
   if (self.parries > c.parries) {
     c.parries = self.parries;
@@ -83,6 +125,8 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   if (
     self.action === "beat" &&
     self.connected &&
+    foe.bladeLost > 0 &&
+    self.contactFlash > 0 &&
     self.elapsed > 0.1 &&
     command(self, "thrust")
   ) {
@@ -96,7 +140,18 @@ export function stepFencingAI(c, self, foe, decision, dt) {
         ? 0.55
         : 0;
   if (self.stamina < 18) return -0.7;
-  const tactic = c.followup || decision?.tactic || "light";
+  const exposed =
+    foe.bladeLost > 0 ||
+    foe.action === "recover" ||
+    (["thrust", "lunge"].includes(foe.action) &&
+      foe.elapsed > MOVES[foe.action].contactEnd);
+  const punish =
+    exposed &&
+    c.openingSeen !== foe.serial &&
+    distance < 3 &&
+    decision?.on_opening;
+  const tactic =
+    c.followup || (punish ? pick("on_opening") : pick("tactic")) || "light";
   let move = decision?.movement || "advance";
   let footwork =
     move === "retreat"
@@ -109,16 +164,17 @@ export function stepFencingAI(c, self, foe, decision, dt) {
             ? -0.5
             : 0;
   // JEV chooses intention; executable spacing respects the narrow piste.
-  if (distance > 2.9 && tactic !== "defend") footwork = 1;
   if (distance < 1.35) footwork = -0.65;
-  if (c.cooldown > 0 || c.response) return footwork;
+  if ((c.cooldown > 0 && !punish) || c.response) return footwork;
   self.line =
-    lineMap[pick("attack_direction")] || lines[Math.floor(Math.random() * 3)];
+    lineMap[pick("attack_direction")] || lines[Math.floor(c.random() * 3)];
   if (c.followup && self.line === c.feintedLine)
     self.line = lines[(lines.indexOf(self.line) + 1) % 3];
   if (tactic === "defend" || tactic === "recover") {
+    self.line = lineMap[pick("guard_direction")] || self.line;
+    if (punish) c.openingSeen = foe.serial;
     c.cooldown = 0.15;
-    return distance > 3 ? 0.25 : footwork;
+    return footwork;
   }
   if (tactic === "dodge") {
     command(self, "retreat");
@@ -132,11 +188,16 @@ export function stepFencingAI(c, self, foe, decision, dt) {
         ? "beat"
         : "thrust";
   if (distance > (type === "lunge" ? 3.1 : type === "beat" ? 2.3 : 2.0))
-    return Math.max(0.6, footwork);
+    return footwork;
   if (command(self, type)) {
+    if (punish) c.openingSeen = foe.serial;
+    c.compound = Boolean(c.followup);
     c.followup = null;
     c.feint = tactic === "feint";
-    c.cooldown = MOVES[type].duration + (c.persona === "raider" ? 0.025 : 0.06);
+    c.cooldown =
+      MOVES[type].duration +
+      (c.persona === "raider" ? 0.025 : 0.06) +
+      c.random() * 0.055;
   }
   return footwork;
 }

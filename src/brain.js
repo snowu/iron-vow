@@ -87,3 +87,37 @@ export function liveDecision(brain, now) {
     ? brain.decision
     : null;
 }
+export function decisionDue(brain, now) {
+  return !brain.pending && now - brain.lastBrain > (brain.failures ? 3 : 0.9);
+}
+export async function requestDecisionPair(brains, states, options = {}) {
+  if (brains.some((b) => b.pending)) return "busy";
+  const now = options.now || (() => 0);
+  const candidates = brains.map((b) => ({ ...b, pending: false }));
+  brains.forEach((b) => {
+    b.pending = true;
+    b.lastBrain = now();
+  });
+  try {
+    const results = await Promise.all(
+      candidates.map((b, i) => requestDecision(b, states[i], options)),
+    );
+    if (options.isCurrent && !options.isCurrent()) return "stale";
+    if (results.every((r) => r === "live")) {
+      const committedAt = now();
+      brains.forEach((b, i) =>
+        Object.assign(b, candidates[i], { decisionAt: committedAt }),
+      );
+      return "live";
+    }
+    // Keep the last complete pair. A faster response never gets extra policy updates.
+    brains.forEach((b, i) => {
+      b.failures = candidates[i].failures;
+    });
+    return "failed";
+  } finally {
+    brains.forEach((b) => {
+      b.pending = false;
+    });
+  }
+}

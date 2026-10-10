@@ -13,10 +13,17 @@ import {
 import {
   fencingController,
   stepFencingAI,
+  stepFencingPair,
   fencingState,
   names,
 } from "./fencing-ai.js";
-import { createBrain, requestDecision, liveDecision } from "./brain.js";
+import {
+  createBrain,
+  requestDecision,
+  liveDecision,
+  decisionDue,
+  requestDecisionPair,
+} from "./brain.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("arena");
 const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -294,7 +301,7 @@ let state = bout(),
   mode = "menu",
   battleMode = "human",
   persona = "warden",
-  playerPersona = "raider",
+  playerPersona = "warden",
   paused = false,
   generation = 0,
   clock = 0,
@@ -453,23 +460,43 @@ $("sound").onclick = () => {
   soundOn = !soundOn;
   $("sound").textContent = soundOn ? "SOUND ON" : "SOUND OFF";
 };
+function observedState(side) {
+  const f = state.fencers[side],
+    foe = state.fencers[1 - side];
+  const history = [
+    ...controllers[side].history.slice(-3),
+    ...state.events
+      .slice(-2)
+      .map((e) => `${e.side === side ? "self" : "opponent"}: ${e.type}`),
+    `Distance ${Math.abs(f.x - foe.x).toFixed(1)}m; score self ${state.score[side]} opponent ${state.score[1 - side]}; opponent action ${foe.action} ${foe.elapsed.toFixed(2)}s`,
+  ];
+  return fencingState(f, foe, side === 0 ? playerPersona : persona, history);
+}
 async function think(side) {
   const token = generation,
-    brain = brains[side],
-    f = state.fencers[side],
-    foe = state.fencers[1 - side];
-  const history = state.events
-    .slice(-6)
-    .map((e) => `${e.side === side ? "self" : "opponent"}: ${e.type}`);
-  const status = await requestDecision(
-    brain,
-    fencingState(f, foe, side === 0 ? playerPersona : persona, history),
+    brain = brains[side];
+  const status = await requestDecision(brain, observedState(side), {
+    apiBase,
+    now: () => clock,
+    isCurrent: () => token === generation && mode === "play",
+  });
+  showDecision(side, status, brain);
+}
+async function thinkPair() {
+  const token = generation,
+    pair = brains;
+  const status = await requestDecisionPair(
+    pair,
+    [observedState(0), observedState(1)],
     {
       apiBase,
       now: () => clock,
       isCurrent: () => token === generation && mode === "play",
     },
   );
+  pair.forEach((brain, side) => showDecision(side, status, brain));
+}
+function showDecision(side, status, brain) {
   if (status === "stale" || status === "busy") return;
   const prefix = side === 0 ? "player-" : "";
   const d = brain.decision;
@@ -506,31 +533,31 @@ function simulate(dt) {
     blue = liveDecision(brains[0], clock);
   if (battleMode === "ai" && (!red || !blue)) return;
   if (state.phase === "fence") {
-    movements[1] = stepFencingAI(
-      controllers[1],
-      state.fencers[1],
-      state.fencers[0],
-      red || fallback,
-      dt,
-    );
-    movements[0] =
-      battleMode === "ai"
-        ? stepFencingAI(
-            controllers[0],
-            state.fencers[0],
-            state.fencers[1],
-            blue,
-            dt,
-          )
-        : (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
-          (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+    if (battleMode === "ai")
+      movements = stepFencingPair(controllers, state.fencers, [blue, red], dt);
+    else {
+      movements[1] = stepFencingAI(
+        controllers[1],
+        state.fencers[1],
+        state.fencers[0],
+        red || fallback,
+        dt,
+      );
+      movements[0] =
+        (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
+        (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+    }
   }
   const previousExchange = state.exchange;
   step(state, dt, movements);
   if (state.exchange !== previousExchange)
     controllers = [
-      fencingController(playerPersona),
-      fencingController(persona),
+      fencingController(
+        playerPersona,
+        controllers[0].history,
+        controllers[0].random,
+      ),
+      fencingController(persona, controllers[1].history, controllers[1].random),
     ];
   for (const e of state.events) {
     if (e.time <= lastEvent) continue;
@@ -730,14 +757,9 @@ function frame(now) {
       if (mode !== "play") break;
     }
     if (!localOnly) {
-      if (clock - brains[1].lastBrain > (brains[1].failures ? 3 : 0.75))
-        think(1);
-      if (
-        battleMode === "ai" &&
-        clock - brains[0].lastBrain > (brains[0].failures ? 3 : 1.05) &&
-        clock - brains[1].lastBrain > 0.25
-      )
-        think(0);
+      if (battleMode === "ai") {
+        if (brains.every((brain) => decisionDue(brain, clock))) thinkPair();
+      } else if (decisionDue(brains[1], clock)) think(1);
     }
   }
   if (

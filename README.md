@@ -26,7 +26,9 @@ Touch detection sweeps the weapon point against a simplified whole-body target, 
 
 Play against JEV or watch both fencers use JEV. The three profiles are the tactician, presser, and counterfencer. The existing API's typed choice keys remain compatible; fencing-specific questions describe thrusts, lunges, blade beats, half-steps, parries, ripostes, and double-touch risk. A delayed controller executes these intentions within the deterministic combat rules. It commits to an observed attack line and can therefore be fooled by a disengage. JEV Details shows actual model, latency, decisions, and intention.
 
-Both brains have independent request state and generation checks. Spectator mode waits when either fresh JEV decision is unavailable; it never replaces either fencer with local AI. Human mode explicitly labels a local sparring fallback while retrying. Keep Fencing restarts completed spectator bouts automatically.
+Both brains have independent request state and generation checks. Spectator requests share a 900 ms refresh budget and commit only complete pairs of replies; a faster API response cannot give one color extra policy updates. Both controllers observe the same pre-command simulation snapshot. The default spectator matchup is tactician versus tactician; profiles remain selectable. Spectator mode waits when either fresh JEV decision is unavailable; it never replaces either fencer with local AI. Human mode explicitly labels a local sparring fallback while retrying. Keep Fencing restarts completed spectator bouts automatically.
+
+Each fencer retains a short history of observed attack lines, parries, retreats, and feints across exchanges. JEV receives those observations alongside recent outcomes, score, exact distance, and commitment timing. The controller samples proactive preparations from JEV's returned probabilities, punishes missed attacks using its cached opening choice, and can disengage a compound followup around a drawn parry. These are bounded observations and executable intentions, not a separately trained opponent model.
 
 The frontend deploys through GitHub Pages. The existing Cloudflare Worker at `iron-vow-jev.zancato-t.workers.dev` calls JEV without exposing the provider key. Existing CORS, request limits, validation, timeouts, and rate limits remain active. The optional `discipline: fencing` selects fencing questions; older melee clients still get their original questions.
 
@@ -40,6 +42,7 @@ npm start
 npm test
 npm run test:browser                       # deterministic input fixture, complete bout
 node tests/fencing-browser.mjs --live --ai # real JEV, both fencers, complete bout
+node analysis/fencing-audit.mjs           # four real JEV bouts, mirrored and swapped profiles
 npm run deploy:api
 ```
 

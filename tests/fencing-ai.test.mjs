@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bout, step, command } from "../src/fencing.js";
-import { fencingController, stepFencingAI } from "../src/fencing-ai.js";
+import {
+  fencingController,
+  stepFencingAI,
+  stepFencingPair,
+} from "../src/fencing-ai.js";
+import { createBrain, decisionDue, requestDecisionPair } from "../src/brain.js";
 test("fencer reacts after perception delay and remains committed to the observed line", () => {
   const s = bout(),
     [a, b] = s.fencers;
@@ -15,6 +20,260 @@ test("fencer reacts after perception delay and remains committed to the observed
   stepFencingAI(c, b, a, policy, 0.08);
   assert.equal(b.action, "parry");
   assert.equal(b.line, "inside");
+});
+test("both AI fighters perceive the same pre-command instant", () => {
+  const s = bout();
+  cSetup(s);
+  const cs = [fencingController("warden"), fencingController("warden")];
+  cs.forEach((c) => {
+    c.cooldown = 0;
+  });
+  const policy = {
+    tactic: "heavy",
+    movement: "advance",
+    attack_direction: "left",
+    on_heavy: "parry",
+  };
+  stepFencingPair(cs, s.fencers, [policy, policy], 1 / 120);
+  assert.deepEqual(
+    s.fencers.map((f) => f.action),
+    ["lunge", "lunge"],
+  );
+  assert.deepEqual(
+    cs.map((c) => c.response),
+    [null, null],
+  );
+  step(s, 1 / 120);
+  stepFencingPair(cs, s.fencers, [policy, policy], 1 / 120);
+  assert.equal(cs[0].response.at, cs[1].response.at);
+});
+test("decision refresh has equal budgets and independent failure backoff", () => {
+  const brains = [createBrain(), createBrain()];
+  brains.forEach((b) => {
+    b.lastBrain = 1;
+  });
+  for (const now of [1.5, 1.91, 2.5])
+    assert.equal(decisionDue(brains[0], now), decisionDue(brains[1], now));
+  brains[0].pending = true;
+  assert.equal(decisionDue(brains[0], 2), false);
+  assert.equal(decisionDue(brains[1], 2), true);
+  brains[0].pending = false;
+  brains[0].failures = 1;
+  assert.equal(decisionDue(brains[0], 2), false);
+  assert.equal(decisionDue(brains[0], 4.01), true);
+});
+test("paired JEV refresh waits for both replies before either policy changes", async () => {
+  const brains = [createBrain(), createBrain()];
+  let release;
+  const slow = new Promise((resolve) => {
+    release = resolve;
+  });
+  const result = requestDecisionPair(
+    brains,
+    [{ persona: "fast" }, { persona: "slow" }],
+    {
+      now: () => 2,
+      fetchImpl: async (_, options) => {
+        const persona = JSON.parse(options.body).persona;
+        if (persona === "slow") await slow;
+        return new Response(JSON.stringify({ source: "jev", tactic: persona }));
+      },
+    },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(brains.every((b) => b.pending));
+  assert.ok(brains.every((b) => b.decision === null));
+  release();
+  assert.equal(await result, "live");
+  assert.deepEqual(
+    brains.map((b) => b.liveCount),
+    [1, 1],
+  );
+  assert.deepEqual(
+    brains.map((b) => b.decisionAt),
+    [2, 2],
+  );
+});
+test("failed or stale paired refresh cannot replace just one fighter's policy", async () => {
+  for (const stale of [false, true]) {
+    const brains = [createBrain(), createBrain()];
+    brains.forEach((b) => {
+      b.decision = { source: "jev", tactic: "old" };
+    });
+    const result = await requestDecisionPair(
+      brains,
+      [{ persona: "fast" }, { persona: "broken" }],
+      {
+        isCurrent: () => !stale,
+        fetchImpl: async (_, options) =>
+          JSON.parse(options.body).persona === "broken"
+            ? new Response("", { status: 503 })
+            : new Response(JSON.stringify({ source: "jev", tactic: "new" })),
+      },
+    );
+    assert.equal(result, stale ? "stale" : "failed");
+    assert.ok(brains.every((b) => b.decision.tactic === "old" && !b.pending));
+  }
+});
+test("observed preparations and feints survive exchange resets", () => {
+  const s = bout();
+  const c = fencingController("warden");
+  const policy = { tactic: "defend", movement: "hold", on_heavy: "accept" };
+  const [self, foe] = s.fencers;
+  foe.line = "outside";
+  command(foe, "lunge");
+  stepFencingAI(c, self, foe, policy, 1 / 120);
+  foe.action = "recover";
+  foe.feinted = true;
+  stepFencingAI(c, self, foe, policy, 1 / 120);
+  const next = fencingController("warden", c.history);
+  assert.ok(next.history.some((h) => h.includes("lunge in outside")));
+  assert.ok(next.history.some((h) => h.includes("feint")));
+});
+test("a missed lunge is punished from JEV's cached opening choice", () => {
+  const s = bout();
+  cSetup(s);
+  s.fencers[1].action = "lunge";
+  s.fencers[1].elapsed = 0.29;
+  const c = fencingController("warden");
+  c.seen = s.fencers[1].serial;
+  c.cooldown = 1;
+  stepFencingAI(
+    c,
+    s.fencers[0],
+    s.fencers[1],
+    {
+      tactic: "defend",
+      movement: "hold",
+      on_opening: "heavy",
+      attack_direction: "right",
+    },
+    1 / 120,
+  );
+  assert.equal(s.fencers[0].action, "lunge");
+  assert.equal(s.fencers[0].attackLine, "outside");
+});
+test("compound followup disengages around a drawn matching parry", () => {
+  const s = bout();
+  cSetup(s);
+  const c = fencingController("warden");
+  c.compound = true;
+  command(s.fencers[0], "lunge");
+  s.fencers[0].elapsed = 0.055;
+  command(s.fencers[1], "parry");
+  stepFencingAI(
+    c,
+    s.fencers[0],
+    s.fencers[1],
+    { attack_direction: "right" },
+    1 / 120,
+  );
+  assert.equal(s.fencers[0].attackLine, "outside");
+  assert.ok(s.fencers[0].disengageAt >= 0);
+});
+test("cached attack intention does not override JEV's distance invitation", () => {
+  for (const movement of ["retreat", "hold"]) {
+    const s = bout();
+    const c = fencingController("warden");
+    c.cooldown = 0;
+    const footwork = stepFencingAI(
+      c,
+      s.fencers[0],
+      s.fencers[1],
+      { tactic: "light", movement, attack_direction: "left" },
+      1 / 120,
+    );
+    assert.equal(s.fencers[0].action, "ready");
+    assert.ok(movement === "retreat" ? footwork < 0 : footwork === 0);
+  }
+});
+test("a missed blade beat is not treated as a successful opening", () => {
+  const s = bout();
+  command(s.fencers[0], "beat");
+  s.fencers[0].elapsed = 0.12;
+  s.fencers[0].connected = true;
+  const c = fencingController("warden");
+  stepFencingAI(
+    c,
+    s.fencers[0],
+    s.fencers[1],
+    { tactic: "guardbreak", movement: "hold" },
+    1 / 120,
+  );
+  assert.equal(s.fencers[0].action, "beat");
+  assert.equal(s.fencers[0].queue, null);
+});
+function seeded(seed) {
+  return () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+}
+test("swapping colors preserves seeded tactical bouts", () => {
+  const policy = {
+    movement: "advance",
+    on_light: "parry",
+    on_heavy: "dodge",
+    on_guardbreak: "counter",
+    on_opening: "light",
+    after_feint: "light",
+    probabilities: {
+      tactic: {
+        light: 0.25,
+        heavy: 0.25,
+        guardbreak: 0.2,
+        feint: 0.2,
+        defend: 0.1,
+      },
+      attack_direction: { left: 0.4, top: 0.2, right: 0.4 },
+    },
+  };
+  const normalized = (s, mirror) => ({
+    phase: s.phase,
+    score: mirror ? [...s.score].reverse() : s.score,
+    fencers: (mirror ? [...s.fencers].reverse() : s.fencers).map((f) => ({
+      x: Math.round(f.x * (mirror ? -1 : 1) * 1e6),
+      action: f.action,
+      line: f.attackLine,
+      stamina: Math.round(f.stamina * 1e6),
+      lost: Math.round(f.bladeLost * 1e6),
+      parries: f.parries,
+    })),
+  });
+  for (let seed = 1; seed <= 16; seed++) {
+    const a = bout(),
+      b = bout();
+    let ca = [
+      fencingController("warden", [], seeded(seed)),
+      fencingController("raider", [], seeded(seed + 70)),
+    ];
+    let cb = [
+      fencingController("raider", [], seeded(seed + 70)),
+      fencingController("warden", [], seeded(seed)),
+    ];
+    for (let tick = 0; tick < 120 * 30 && a.phase !== "finished"; tick++) {
+      const exchange = a.exchange;
+      step(
+        a,
+        1 / 120,
+        stepFencingPair(ca, a.fencers, [policy, policy], 1 / 120),
+      );
+      step(
+        b,
+        1 / 120,
+        stepFencingPair(cb, b.fencers, [policy, policy], 1 / 120),
+      );
+      assert.deepEqual(
+        normalized(a, false),
+        normalized(b, true),
+        `seed ${seed}, tick ${tick}`,
+      );
+      if (a.exchange !== exchange) {
+        ca = ca.map((c) => fencingController(c.persona, c.history, c.random));
+        cb = cb.map((c) => fencingController(c.persona, c.history, c.random));
+      }
+    }
+  }
 });
 function cSetup(s) {
   s.fencers[0].x = -1.2;
