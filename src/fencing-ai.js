@@ -68,7 +68,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.observed = observation;
     if (["thrust", "lunge", "beat", "parry", "retreat"].includes(foe.action)) {
       c.history.push(
-        `opponent: ${foe.action} in ${foe.action === "parry" ? foe.line : foe.attackLine} line`,
+        `opponent: ${foe.technique || foe.action} in ${foe.action === "parry" ? foe.parryLine : foe.attackLine} line`,
       );
     } else if (foe.action === "recover" && foe.feinted) {
       c.history.push("opponent: cancelled preparation as a feint");
@@ -83,6 +83,21 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     return decision?.movement === "advance" ? 1 : 0.5;
   }
   if (c.time > c.followupUntil) c.followup = null;
+  // Anticipate a riposte using JEV's cached defensive choice and guessed guard,
+  // before its actual attack line is known. A changed-line riposte can fool it.
+  if (
+    self.displacement === "parry" &&
+    self.bladeLost > 0.12 &&
+    !self.defenseQueue &&
+    foe.riposte > 0 &&
+    foe.action === "ready"
+  ) {
+    const defense = pick("on_light");
+    if (["parry", "block"].includes(defense)) {
+      self.line = lineMap[pick("guard_direction")] || self.line;
+      command(self, "parry");
+    }
+  }
   if (
     foe.serial !== c.seen &&
     ["thrust", "lunge", "beat"].includes(foe.action)
@@ -128,7 +143,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.compound &&
     ["thrust", "lunge"].includes(self.action) &&
     foe.action === "parry" &&
-    foe.line === self.attackLine &&
+    foe.parryLine === self.attackLine &&
     self.elapsed >= 0.035 &&
     self.elapsed <= 0.17 &&
     !self.connected
@@ -142,8 +157,10 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.cooldown = 0;
     if (distance < 2.5) {
       const opening = pick("on_opening") || "light";
-      if (opening !== "recover")
+      if (opening !== "recover") {
+        self.line = lineMap[pick("attack_direction")] || self.line;
         command(self, opening === "heavy" ? "lunge" : "thrust");
+      }
       return 0;
     }
   }
@@ -264,7 +281,7 @@ export function fencingState(self, foe, persona, history = []) {
       health: "high",
       stamina: bucket(self.stamina),
       action: action(self),
-      guard: line(self.line),
+      guard: line(self.action === "parry" ? self.parryLine : self.line),
       nearWall: Math.abs(self.x) > 5.4,
     },
     opponent: {
@@ -272,7 +289,7 @@ export function fencingState(self, foe, persona, history = []) {
       stamina: bucket(foe.stamina),
       action: action(foe),
       attackDirection: line(foe.attackLine),
-      guard: line(foe.line),
+      guard: line(foe.action === "parry" ? foe.parryLine : foe.line),
       status:
         foe.bladeLost > 0
           ? "staggered and vulnerable"

@@ -331,6 +331,49 @@ function seeded(seed) {
     return seed / 4294967296;
   };
 }
+test("JEV anticipates a riposte using its guessed guard rather than an unseen attack line", () => {
+  const s = bout();
+  cSetup(s);
+  const [a, b] = s.fencers;
+  a.displacement = "parry";
+  a.bladeLost = 0.18;
+  b.riposte = 0.4;
+  b.line = "inside";
+  const c = fencingController("warden");
+  stepFencingAI(
+    c,
+    a,
+    b,
+    {
+      tactic: "defend",
+      movement: "hold",
+      on_light: "parry",
+      guard_direction: "right",
+    },
+    1 / 120,
+  );
+  assert.equal(a.defenseQueue.line, "outside");
+  assert.equal(b.action, "ready");
+});
+test("JEV chooses the riposte line independently of its successful parry", () => {
+  const s = bout();
+  cSetup(s);
+  const a = s.fencers[0];
+  a.parries = 1;
+  a.riposte = 0.4;
+  a.line = "inside";
+  const c = fencingController("warden");
+  stepFencingAI(
+    c,
+    a,
+    s.fencers[1],
+    { on_opening: "light", attack_direction: "right" },
+    1 / 120,
+  );
+  assert.equal(a.action, "thrust");
+  assert.equal(a.attackLine, "outside");
+  assert.equal(a.technique, "riposte");
+});
 test("swapping colors preserves seeded tactical bouts", () => {
   const policy = {
     initiative: "heavy",

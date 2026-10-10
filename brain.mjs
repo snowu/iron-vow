@@ -188,7 +188,7 @@ export const fencingQuestions = {
   on_opening: {
     type: "choice",
     instructions:
-      "Choose how to exploit a successful parry, displaced blade, or opponent's missed attack in recovery. A quick thrust fits a close opening; lunge if the opponent recovered distance. Recover only when tired or outside useful reach. This cached choice executes immediately when an opening is observed, without waiting for another request.",
+      "Choose how to exploit a successful parry, displaced blade, or opponent's missed attack in recovery. A quick thrust fits a close opening; lunge if the opponent recovered distance. A parried fencer can recover their blade and counter-parry the riposte after a short delay: changing the riposte line makes that defense harder. Recover only when tired or outside useful reach. This cached choice executes immediately when an opening is observed, without waiting for another request.",
     criteria: {
       light: "Immediate thrust riposte",
       heavy: "Lunge riposte",

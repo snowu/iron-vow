@@ -70,6 +70,10 @@ try {
           if (!events.has(key)) {
             events.add(key);
             audit.events[e.type] = (audit.events[e.type] || 0) + 1;
+            if (e.type === "parry" && e.technique === "counter-parry")
+              audit.events.counterParry = (audit.events.counterParry || 0) + 1;
+            if (e.type === "touch" && e.technique === "riposte")
+              audit.events.riposteTouch = (audit.events.riposteTouch || 0) + 1;
           }
         }
         if (s.mode === "play") requestAnimationFrame(observe);

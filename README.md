@@ -36,6 +36,10 @@ At each exchange opening, rested fencers establish useful distance before retrea
 
 Invitations have a bounded patience window, varied by profile and independently of color. When real pressure stays absent, JEV's separate `initiative` choice commits a thrust or lunge and closes to that attack's range. Feints do not reset this window; an incoming committed attack still triggers normal defense. The initiative choice is model-supplied, rather than a hidden replacement policy.
 
+Parries commit to a blade line. After your attack is parried, Shift can buffer a counter-parry through the first 70 ms of blade recovery; it must still meet the incoming blade in the correct line. A changed-line riposte can defeat that anticipation, while a successful counter-parry creates another riposte. Blade-beat displacement retains its full recovery. JEV can anticipate a riposte using its cached defensive choice and guard line, and selects its riposte line from its attack-direction probabilities.
+
+Blade displacement restricts the weapon, not footwork: Space can retreat out of a riposte or blade-beat followup, cancelling a buffered counter-parry. It offers no invulnerability and cannot save a fencer trapped against the back line.
+
 ## Development
 
 ```sh

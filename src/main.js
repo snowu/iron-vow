@@ -575,7 +575,10 @@ function simulate(dt) {
     }
     if (e.type === "double") announce("DOUBLE TOUCH", 1);
     if (e.type === "parry") {
-      announce(`${who} · PARRY — RIPOSTE`, 0.35);
+      announce(
+        `${who} · ${e.technique === "counter-parry" ? "COUNTER-PARRY" : "PARRY"} — RIPOSTE`,
+        0.35,
+      );
       tone(1300);
     }
     if (e.point) {
@@ -724,7 +727,9 @@ function hud() {
       : a.riposte > 0
         ? "RIPOSTE · THRUST NOW"
         : a.bladeLost > 0
-          ? "BLADE DISPLACED · RECOVER"
+          ? a.displacement === "parry"
+            ? "SHIFT COUNTER-PARRY · SPACE RETREAT"
+            : "BLADE DISPLACED · RECOVER"
           : ["thrust", "lunge"].includes(b.action)
             ? `${b.action.toUpperCase()} · ${b.attackLine.toUpperCase()} · SHIFT TO PARRY`
             : `${a.line.toUpperCase()} LINE · ${a.action === "ready" ? "EN GARDE" : a.action.toUpperCase()}`;

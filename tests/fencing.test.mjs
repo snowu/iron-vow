@@ -211,3 +211,113 @@ test("disengage follows a continuous curved point path instead of teleporting li
   run(s, 0.025);
   assert.notDeepEqual(geometry(f).tip, before);
 });
+function parriedExchange(side = 0, offset = 0) {
+  const s = close(1.9),
+    a = s.fencers[side],
+    b = s.fencers[1 - side];
+  for (const f of s.fencers) f.x += offset;
+  command(a, "thrust");
+  run(s, 0.04);
+  command(b, "parry");
+  run(s, 0.04);
+  assert.equal(b.parries, 1);
+  return { s, a, b };
+}
+test("a timed counter-parry can answer a riposte and create a second riposte", () => {
+  for (const side of [0, 1]) {
+    const { s, a, b } = parriedExchange(side);
+    command(b, "thrust");
+    run(s, 0.05);
+    assert.ok(command(a, "parry"));
+    run(s, 0.05);
+    assert.equal(a.parries, 1);
+    assert.deepEqual(s.score, [0, 0]);
+    assert.ok(
+      s.events.some(
+        (e) => e.type === "parry" && e.technique === "counter-parry",
+      ),
+    );
+    a.line = "outside";
+    assert.ok(command(a, "thrust"));
+    run(s, 0.3);
+    assert.equal(s.score[side], 1);
+    assert.equal(s.score[1 - side], 0);
+    assert.ok(
+      s.events.some((e) => e.type === "touch" && e.technique === "riposte"),
+    );
+  }
+});
+test("early counter-parry input buffers blade recovery and preserves the committed line", () => {
+  const { s, a, b } = parriedExchange();
+  command(b, "thrust");
+  assert.ok(command(a, "parry"));
+  assert.ok(a.defenseQueue);
+  a.line = "high";
+  run(s, 0.08);
+  assert.equal(a.parries, 1);
+  assert.equal(a.parryLine, "inside");
+  assert.deepEqual(s.score, [0, 0]);
+});
+test("a changed-line riposte defeats a counter-parry set for the original line", () => {
+  const { s, a, b } = parriedExchange();
+  b.line = "outside";
+  command(b, "thrust");
+  command(a, "parry");
+  run(s, 0.3);
+  assert.equal(a.parries, 0);
+  assert.deepEqual(s.score, [0, 1]);
+});
+test("changing intended guard cannot retarget an already committed parry", () => {
+  const s = close(1.9),
+    [a, b] = s.fencers;
+  a.line = "outside";
+  command(a, "thrust");
+  run(s, 0.04);
+  command(b, "parry");
+  b.line = "outside";
+  run(s, 0.3);
+  assert.equal(b.parryLine, "inside");
+  assert.equal(b.parries, 0);
+  assert.deepEqual(s.score, [1, 0]);
+});
+test("blade beats still deny counter-parry recovery", () => {
+  const s = close(1.9),
+    [a, b] = s.fencers;
+  command(a, "beat");
+  run(s, 0.2);
+  assert.equal(b.displacement, "beat");
+  assert.ok(b.bladeLost <= 0.12);
+  assert.equal(command(b, "parry"), false);
+  assert.equal(b.defenseQueue, null);
+});
+test("each committed parry line can physically intercept its matching thrust", () => {
+  for (const line of ["high", "inside", "outside"]) {
+    const s = close(1.9),
+      [a, b] = s.fencers;
+    a.line = b.line = line;
+    command(a, "thrust");
+    run(s, 0.04);
+    command(b, "parry");
+    run(s, 0.3);
+    assert.equal(b.parries, 1, line);
+    assert.deepEqual(s.score, [0, 0]);
+  }
+});
+test("a parried fencer can choose retreat instead of counter-parrying a riposte", () => {
+  const { s, a, b } = parriedExchange();
+  command(a, "parry");
+  assert.ok(a.defenseQueue);
+  command(b, "thrust");
+  assert.ok(command(a, "retreat"));
+  assert.equal(a.defenseQueue, null);
+  assert.ok(a.bladeLost > 0);
+  run(s, 0.35);
+  assert.deepEqual(s.score, [0, 0]);
+});
+test("displaced retreat has no invulnerability when the back line prevents escape", () => {
+  const { s, a, b } = parriedExchange(0, -5.55);
+  command(b, "thrust");
+  assert.ok(command(a, "retreat"));
+  run(s, 0.35);
+  assert.deepEqual(s.score, [0, 1]);
+});

@@ -26,11 +26,15 @@ export function fencer(side) {
     parries: 0,
     riposte: 0,
     bladeLost: 0,
+    displacement: null,
+    parryLine: "inside",
+    technique: null,
     flash: 0,
     moving: 0,
     travel: 0,
     feinted: false,
     queue: null,
+    defenseQueue: null,
     entryExtension: 0,
     touchTip: null,
     beatTip: null,
@@ -55,7 +59,26 @@ export function bout() {
   };
 }
 export function command(f, type) {
-  if (!MOVES[type] || f.stamina < MOVES[type].cost || f.bladeLost > 0)
+  if (
+    type === "parry" &&
+    f.displacement === "parry" &&
+    f.bladeLost > 0.12 &&
+    f.stamina >= MOVES.parry.cost
+  ) {
+    f.defenseQueue ??= { line: f.line };
+    return true;
+  }
+  const counterParry =
+    type === "parry" &&
+    f.displacement === "parry" &&
+    f.bladeLost > 0 &&
+    f.bladeLost <= 0.12;
+  const escape = type === "retreat" && f.bladeLost > 0;
+  if (
+    !MOVES[type] ||
+    f.stamina < MOVES[type].cost ||
+    (f.bladeLost > 0 && !counterParry && !escape)
+  )
     return false;
   const attacking = ["thrust", "lunge"].includes(f.action);
   const early = attacking && f.elapsed < MOVES[f.action].release;
@@ -65,6 +88,8 @@ export function command(f, type) {
     f.action !== "ready" &&
     !recovery &&
     !prepared &&
+    !counterParry &&
+    !escape &&
     !(early && ["parry", "retreat"].includes(type))
   ) {
     if (
@@ -77,6 +102,13 @@ export function command(f, type) {
     return false;
   }
   f.entryExtension = extension(f);
+  f.technique = counterParry
+    ? "counter-parry"
+    : f.riposte > 0 && ["thrust", "lunge"].includes(type)
+      ? "riposte"
+      : type;
+  if (counterParry) f.bladeLost = 0;
+  if (["thrust", "lunge"].includes(type)) f.riposte = 0;
   f.touchTip = null;
   f.beatTip = null;
   f.action = type;
@@ -84,11 +116,13 @@ export function command(f, type) {
   f.serial++;
   f.connected = false;
   f.attackLine = f.line;
+  if (type === "parry") f.parryLine = f.line;
   f.previousLine = f.line;
   f.disengageAt = -1;
   f.stamina -= MOVES[type].cost;
   f.feinted = false;
   f.queue = null;
+  f.defenseQueue = null;
   return true;
 }
 export function feint(f) {
@@ -136,7 +170,12 @@ export function extension(f) {
 }
 export function geometry(f, foe = null) {
   const ext = Math.min(1, extension(f));
-  const line = ["thrust", "lunge"].includes(f.action) ? f.attackLine : f.line;
+  const line =
+    f.action === "parry"
+      ? f.parryLine
+      : ["thrust", "lunge"].includes(f.action)
+        ? f.attackLine
+        : f.line;
   const lineY = (value) =>
     value === "high" ? 1.64 : value === "outside" ? 1.35 : 1.14;
   const transition =
@@ -151,7 +190,7 @@ export function geometry(f, foe = null) {
     (f.disengageAt >= 0 ? Math.sin(transition * Math.PI) * 0.22 : 0);
   if (f.action === "parry" || (f.flash > 0 && f.action === "ready")) {
     hand.x = 0.5;
-    hand.y = f.line === "high" ? 1.5 : f.line === "outside" ? 1.4 : 1.28;
+    hand.y = line === "high" ? 1.5 : line === "outside" ? 1.21 : 1.02;
     angle = 0.9;
   }
   if (f.action === "beat") {
@@ -216,6 +255,7 @@ function event(s, type, side) {
     type,
     side,
     time: s.time,
+    technique: s.fencers[side]?.technique,
     ...(s.contactPoint ? { point: { ...s.contactPoint } } : {}),
   });
   s.contactPoint = null;
@@ -244,6 +284,12 @@ export function step(s, dt, movement = [0, 0]) {
     const old = f.x;
     f.riposte = Math.max(0, f.riposte - dt);
     f.bladeLost = Math.max(0, f.bladeLost - dt);
+    if (f.defenseQueue && f.bladeLost <= 0.12) {
+      const queued = f.defenseQueue;
+      f.defenseQueue = null;
+      f.line = queued.line;
+      command(f, "parry");
+    }
     f.flash = Math.max(0, f.flash - dt);
     f.contactFlash = Math.max(0, f.contactFlash - dt);
     f.stamina = Math.min(100, f.stamina + dt * (f.action === "ready" ? 25 : 8));
@@ -291,7 +337,9 @@ export function step(s, dt, movement = [0, 0]) {
         f.contactFlash = 0.1;
         foe.contactFlash = 0.1;
         foe.bladeLost = 0.24;
+        foe.displacement = "beat";
         foe.queue = null;
+        foe.defenseQueue = null;
         event(s, "beat", i);
       } else event(s, "miss", i);
     }
@@ -309,10 +357,11 @@ export function step(s, dt, movement = [0, 0]) {
       foe.elapsed >= 0.01 &&
       foe.elapsed <= 0.13 &&
       foe.bladeLost <= 0 &&
-      foe.line === f.attackLine;
+      foe.parryLine === f.attackLine;
     if (parry && bladeContact) {
       f.connected = true;
       f.bladeLost = 0.19;
+      f.displacement = "parry";
       f.contactFlash = foe.contactFlash = 0.1;
       s.contactPoint = bladeContact;
       foe.riposte = 0.42;
