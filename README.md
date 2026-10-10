@@ -51,7 +51,7 @@ The camera now views the duel from the side, keeping both fighters and their swo
 
 ## Cloudflare JEV backend
 
-`worker/index.js` uses the same nine-question JEV contract as the local Node server. `wrangler.jsonc` targets Worker `iron-vow-jev` in the existing Cloudflare account. It validates combat state, limits JSON bodies to 8 KiB, supplies server-owned personalities, applies per-IP (120/minute) and service (900/minute) rate limit bindings, and enables logs and sampled traces. Cloudflare rate limit counters are per location, approximate safeguards rather than a billing cap. Errors retain CORS headers so the game can show LOCAL fallback and retry. Requests to JEV time out after six seconds; the browser times out after nine.
+`worker/index.js` uses the same nine-question JEV contract as the local Node server. `wrangler.jsonc` targets Worker `iron-vow-jev` in the existing Cloudflare account. It validates combat state, limits JSON bodies to 8 KiB, supplies server-owned personalities, applies per-IP (240/minute) and service (900/minute) rate limit bindings, and enables logs and sampled traces. Cloudflare rate limit counters are per location, approximate safeguards rather than a billing cap. Errors retain CORS headers so the game can show LOCAL fallback and retry. Requests to JEV time out after six seconds; the browser times out after nine.
 
 ```sh
 npm run deploy:api  # deploy backend changes; existing secret is preserved
@@ -61,3 +61,13 @@ API_URL=https://iron-vow-jev.zancato-t.workers.dev node tests/browser.mjs --syst
 ```
 
 Frontend pushes to main automatically redeploy GitHub Pages. Backend changes currently deploy through `npm run deploy:api`; they are not automatically deployed by the Pages workflow. Browser origins restrict browser access but are not user authentication. The backend never accepts a client-supplied upstream URL, model, API key, or question set.
+
+## JEV vs JEV spectator mode
+
+Select **JEV vs JEV**, choose the blue fighter personality, choose the red opponent, and click **Watch Duel**. Both fighters request independent live JEV decisions using their own health, stamina, guard, personality, and opponent observations. Their cached contingencies and delayed reactions use the same combat rules. Both AI fighters use the same personality-dependent attack timing. The blue and red panels show their separate model, latency, probabilities, and live decision counts.
+
+Escape pauses. Combat inputs are disabled while spectating. **Keep Dueling** advances rounds and starts a new best-of-three after a 2.5-second result display; disable it to advance manually. If either live decision cache expires, the fighters wait for JEV to reconnect. Spectator mode never substitutes local AI. Decision updates are staggered at roughly 1.1 seconds per fighter.
+
+```sh
+GAME_URL=https://snowu.github.io/iron-vow/ node tests/ai-browser.mjs
+```

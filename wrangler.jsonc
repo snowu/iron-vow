@@ -11,7 +11,7 @@
     {
       "name": "PLAYER_LIMIT",
       "namespace_id": "57043181",
-      "simple": { "limit": 120, "period": 60 },
+      "simple": { "limit": 240, "period": 60 },
     },
     {
       "name": "SERVICE_LIMIT",

@@ -670,3 +670,99 @@ h2 {
     width: 190px;
   }
 }
+.mode-select {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+.mode-select button {
+  flex: 1;
+  padding: 10px;
+}
+.mode-select .selected {
+  color: #c2f4fa;
+  border-color: #87b9c3;
+  background: #254553;
+}
+#blue-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  margin: 12px 0;
+}
+#blue-select select {
+  background: #162b36;
+  color: #d0ebec;
+  border: 1px solid #547582;
+  padding: 7px;
+}
+#blue-select input {
+  accent-color: #93c8d5;
+}
+#brain-player {
+  position: fixed;
+  left: 32px;
+  bottom: 96px;
+  width: 260px;
+  pointer-events: none;
+  opacity: 0.8;
+}
+#brain-player .brain-title {
+  font-size: 22px;
+}
+#brain-player p {
+  text-transform: uppercase;
+  color: #b9dce1;
+  font-size: 12px;
+}
+#brain-player small {
+  color: #b1c7cd;
+  font-size: 11px;
+}
+#brain-player .prob {
+  grid-template-columns: 80px 1fr 32px;
+}
+#spectator-hint {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #a6d2db;
+  font-size: 12px;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+@media (max-height: 850px) {
+  .panel {
+    top: 12%;
+  }
+  h1 {
+    font-size: 72px;
+    margin: 12px 0;
+  }
+  .panel p {
+    margin: 10px 0;
+  }
+  .select-label {
+    margin-top: 12px;
+  }
+}
+@media (max-width: 700px) {
+  #brain-player {
+    left: 12px;
+    bottom: 70px;
+    width: 180px;
+  }
+  #brain {
+    display: block;
+    right: 12px;
+    bottom: 70px;
+    width: 180px;
+  }
+  #blue-select {
+    flex-wrap: wrap;
+  }
+}

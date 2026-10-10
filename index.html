@@ -22,7 +22,9 @@
     </header>
     <section id="hud" class="hidden">
       <div class="fighter-hud player">
-        <div class="label">YOU <span>THE EXILE</span></div>
+        <div class="label">
+          <b id="player-name">YOU</b> <span>THE EXILE</span>
+        </div>
         <div class="health"><i id="p-health"></i></div>
         <div class="stamina"><i id="p-stamina"></i></div>
       </div>
@@ -62,13 +64,39 @@
       <div id="probabilities"></div>
       <small id="latency">Live decisions · typed probabilities</small>
     </aside>
+    <aside id="brain-player" class="hidden">
+      <div class="eyebrow">BLUE FIGHTER · JEV</div>
+      <div class="brain-title">
+        JEV <span id="player-brain-status">CONNECTING</span>
+      </div>
+      <p id="player-intent">Reading the arena</p>
+      <div id="player-probabilities"></div>
+      <small id="player-latency">Waiting for JEV</small>
+    </aside>
+    <div id="spectator-hint" class="hidden">JEV vs JEV · ESC TO PAUSE</div>
     <div id="intro" class="panel">
       <div class="eyebrow">A DUEL OF INTENT</div>
       <h1>IRON<br /><em>VOW</em></h1>
       <p>
         Steel has three directions.<br />Survival has one rule: read your enemy.
       </p>
-      <div class="select-label">CHOOSE YOUR OPPONENT</div>
+      <div class="mode-select">
+        <button data-mode="human" class="selected">PLAY vs JEV</button>
+        <button data-mode="ai">JEV vs JEV</button>
+      </div>
+      <div id="blue-select" class="hidden">
+        <label for="player-persona">BLUE FIGHTER</label>
+        <select id="player-persona">
+          <option value="raider">RAIDER</option>
+          <option value="warden">WARDEN</option>
+          <option value="duelist">DUELIST</option>
+        </select>
+        <label
+          ><input id="auto-rounds" type="checkbox" checked /> KEEP
+          DUELING</label
+        >
+      </div>
+      <div class="select-label">RED FIGHTER / OPPONENT</div>
       <div class="personas">
         <button class="selected" data-persona="warden">
           01 <strong>WARDEN</strong

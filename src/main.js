@@ -29,6 +29,12 @@ import { controller, stepAI } from "./ai.js";
 import { stepDuel } from "./world.js";
 import { yawToTarget } from "./facing.js";
 import { swordPose } from "./pose.js";
+import {
+  createBrain,
+  duelState,
+  requestDecision,
+  liveDecision,
+} from "./brain.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("arena");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
@@ -349,6 +355,8 @@ const pVisual = knight("player"),
 let player = fighter(-1.2, 2),
   enemy = fighter(1.2, -1.4),
   persona = "warden",
+  playerPersona = "raider",
+  battleMode = "human",
   mode = "intro",
   paused = false,
   round = 1,
@@ -356,12 +364,6 @@ let player = fighter(-1.2, 2),
   eWins = 0,
   noticeTimer = 0,
   clock = 0,
-  lastBrain = 0,
-  pending = false,
-  decision = null,
-  decisionAt = 0,
-  liveCount = 0,
-  failures = 0,
   generation = 0,
   history = [],
   particles = [],
@@ -370,7 +372,9 @@ let player = fighter(-1.2, 2),
   accumulator = 0,
   soundOn = false,
   audio;
-let enemyController = controller(persona);
+let enemyController = controller(persona),
+  playerController = controller(playerPersona);
+let brains = { enemy: createBrain(), player: createBrain() };
 const keys = new Set(),
   look = new THREE.Vector3(),
   desiredCamera = new THREE.Vector3();
@@ -417,10 +421,11 @@ function burst(f, color) {
   }
 }
 function setGuard(dir) {
+  if (battleMode === "ai") return;
   switchGuard(player, dir);
 }
 function attack(type) {
-  if (mode !== "play" || paused) return;
+  if (mode !== "play" || paused || battleMode === "ai") return;
   if (type === "guardbreak" && counterBreak(player, enemy)) {
     announce("COUNTER BREAK", 0.65);
     return;
@@ -437,7 +442,7 @@ function attack(type) {
   }
 }
 function playerDodge() {
-  if (mode !== "play" || paused) return;
+  if (mode !== "play" || paused || battleMode === "ai") return;
   if (requestDefense(player, "dodge") !== "rejected") {
     const delta = movementVector();
     if (delta.length() < 0.1)
@@ -470,7 +475,7 @@ window.addEventListener("keydown", (e) => {
     paused = !paused;
     $("paused").classList.toggle("hidden", !paused);
   }
-  if (e.repeat || paused) return;
+  if (e.repeat || paused || battleMode === "ai") return;
   if (k === "arrowleft" || k === "q") setGuard("left");
   if (k === "arrowup" || k === "e") setGuard("top");
   if (k === "arrowright" || k === "r") setGuard("right");
@@ -501,7 +506,7 @@ canvas.addEventListener("pointerdown", (e) => {
 let guardMouseX = 0,
   guardMouseY = 0;
 window.addEventListener("pointermove", (event) => {
-  if (mode !== "play" || paused) return;
+  if (mode !== "play" || paused || battleMode === "ai") return;
   guardMouseX += event.movementX;
   guardMouseY += event.movementY;
   if (Math.hypot(guardMouseX, guardMouseY) > 28) {
@@ -549,6 +554,10 @@ function resetRound() {
   generation++;
   enemyController = controller(persona);
   enemyController.cooldown = 0.8;
+  playerController = controller(playerPersona);
+  playerController.cooldown = 0.8;
+  brains = { enemy: createBrain(), player: createBrain() };
+  keys.clear();
   hitstop = 0;
   accumulator = 0;
   player = fighter(0, 2);
@@ -557,8 +566,13 @@ function resetRound() {
     persona === "warden" ? 1.6 : persona === "raider" ? 1.45 : 1.3;
   mode = "play";
   paused = false;
-  decision = null;
-  lastBrain = -100;
+  if (battleMode === "ai")
+    player.windScale =
+      playerPersona === "warden"
+        ? 1.6
+        : playerPersona === "raider"
+          ? 1.45
+          : 1.3;
   history = [];
   round = pWins + eWins + 1;
   $("round").textContent = `ROUND ${round}`;
@@ -569,8 +583,42 @@ function resetRound() {
     $(id).classList.remove("hidden");
   $("intro").classList.add("hidden");
   $("result").classList.add("hidden");
-  announce("FIGHT", 0.8);
+  $("player-name").textContent =
+    battleMode === "ai" ? `BLUE · ${playerPersona.toUpperCase()}` : "YOU";
+  $("enemy-name").textContent =
+    battleMode === "ai"
+      ? `RED · ${persona.toUpperCase()}`
+      : `THE ${persona.toUpperCase()}`;
+  $("guard").classList.toggle("hidden", battleMode === "ai");
+  $("controls").classList.toggle("hidden", battleMode === "ai");
+  $("brain-player").classList.toggle("hidden", battleMode !== "ai");
+  $("spectator-hint").classList.toggle("hidden", battleMode !== "ai");
+  $("spectator-hint").textContent = "JEV vs JEV · ESC TO PAUSE";
+  $("brain-status").textContent = localOnly ? "LOCAL" : "CONNECTING";
+  $("intent").textContent = "Reading the arena";
+  $("probabilities").replaceChildren();
+  $("latency").textContent = "Waiting for JEV";
+  $("player-brain-status").textContent = "CONNECTING";
+  $("player-intent").textContent = "Reading the arena";
+  $("player-probabilities").replaceChildren();
+  $("player-latency").textContent = "Waiting for JEV";
+  announce(battleMode === "ai" ? "JEV vs JEV" : "FIGHT", 0.8);
 }
+for (const button of document.querySelectorAll("[data-mode]"))
+  button.onclick = () => {
+    battleMode = button.dataset.mode;
+    document
+      .querySelectorAll("[data-mode]")
+      .forEach((b) => b.classList.toggle("selected", b === button));
+    $("blue-select").classList.toggle("hidden", battleMode !== "ai");
+    $("start").innerHTML =
+      battleMode === "ai"
+        ? "WATCH DUEL <span>↗</span>"
+        : "ENTER THE RING <span>↗</span>";
+  };
+$("player-persona").onchange = () => {
+  playerPersona = $("player-persona").value;
+};
 $("start").onclick = () => {
   pWins = eWins = 0;
   resetRound();
@@ -581,6 +629,9 @@ $("next").onclick = () => {
 };
 $("menu").onclick = () => {
   mode = "intro";
+  generation++;
+  $("brain-player").classList.add("hidden");
+  $("spectator-hint").classList.add("hidden");
   $("result").classList.add("hidden");
   $("intro").classList.remove("hidden");
   for (const id of ["hud", "guard", "brain", "controls", "combat-read"])
@@ -595,80 +646,85 @@ function finish() {
   $("result-label").textContent = match
     ? "DUEL COMPLETE"
     : `ROUND ${round} COMPLETE`;
-  $("result-title").textContent = won ? "VICTORY" : "DEFEATED";
-  $("result-detail").textContent = match
-    ? won
-      ? "You held your vow. The ring is yours."
-      : "The ring remembers. Return with sharper intent."
-    : `${pWins} — ${eWins} · First to two victories`;
+  $("result-title").textContent =
+    battleMode === "ai"
+      ? `${won ? "BLUE" : "RED"} WINS`
+      : won
+        ? "VICTORY"
+        : "DEFEATED";
+  $("result-detail").textContent =
+    battleMode === "ai"
+      ? `${playerPersona.toUpperCase()} ${pWins} — ${eWins} ${persona.toUpperCase()}`
+      : match
+        ? won
+          ? "You held your vow. The ring is yours."
+          : "The ring remembers. Return with sharper intent."
+        : `${pWins} — ${eWins} · First to two victories`;
   $("next").textContent = match ? "DUEL AGAIN ↗" : "NEXT ROUND ↗";
   $("result").classList.remove("hidden");
+  if (battleMode === "ai" && $("auto-rounds").checked) {
+    const finishedGeneration = generation;
+    setTimeout(() => {
+      if (
+        generation === finishedGeneration &&
+        mode === "result" &&
+        battleMode === "ai" &&
+        $("auto-rounds").checked
+      ) {
+        if (match) pWins = eWins = 0;
+        resetRound();
+      }
+    }, 2500);
+  }
 }
-const bucket = (n) => (n > 65 ? "high" : n > 30 ? "moderate" : "low");
-async function think() {
-  if (localOnly) return;
-  if (pending || mode !== "play" || paused) return;
-  pending = true;
-  lastBrain = clock;
-  const token = generation;
-  const state = {
-    persona,
-    distance:
-      Math.hypot(player.x - enemy.x, player.z - enemy.z) < 2.7
-        ? "within sword reach"
-        : "outside sword reach",
-    self: {
-      health: bucket(enemy.hp),
-      stamina: bucket(enemy.stamina),
-      action: enemy.action,
-      guard: enemy.guard,
-      nearWall: Math.hypot(enemy.x, enemy.z) > 7,
-    },
-    opponent: {
-      health: bucket(player.hp),
-      stamina: bucket(player.stamina),
-      action: player.action,
-      attackDirection: player.attackDir,
-      guard: player.guard,
-      status:
-        player.stun > 0
-          ? "staggered and vulnerable"
-          : player.action === "recover"
-            ? "recovering from a committed action"
-            : "ready",
-      parryHabit:
-        player.parries >= 2
-          ? "frequently parries incoming attacks"
-          : player.parries
-            ? "has parried an attack"
-            : "has not parried",
-      blockedAttacks:
-        player.blocks >= 3 ? "frequently blocks" : "rarely blocks",
-    },
-    habits: history.slice(-6),
-  };
-  try {
-    const res = await fetch(`${apiBase}/api/decision`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state),
-      signal: AbortSignal.timeout(9000),
-    });
-    if (!res.ok) throw Error("JEV unavailable");
-    const result = await res.json();
-    if (mode !== "play" || token !== generation) return;
-    decision = result;
-    decisionAt = clock;
-    liveCount++;
-    failures = 0;
-    $("connection").textContent = "JEV · LIVE";
-    $("connection").classList.remove("offline");
-    $("brain-status").textContent = "LIVE";
-    $("intent").textContent =
+function textIfChanged(id, text) {
+  if ($(id).textContent !== text) $(id).textContent = text;
+}
+function updateConnection() {
+  if (battleMode === "ai") {
+    const blue = !!liveDecision(brains.player, clock),
+      red = !!liveDecision(brains.enemy, clock);
+    textIfChanged(
+      "connection",
+      blue && red ? "JEV vs JEV · LIVE" : "JEV vs JEV · WAITING",
+    );
+    $("connection").classList.toggle("offline", !blue || !red);
+    textIfChanged(
+      "spectator-hint",
+      blue && red
+        ? "JEV vs JEV · ESC TO PAUSE"
+        : "WAITING FOR BOTH JEV BRAINS · RETRYING",
+    );
+  } else {
+    const live = brains.enemy.failures === 0 && brains.enemy.decision;
+    textIfChanged("connection", live ? "JEV · LIVE" : "JEV · OFFLINE");
+    $("connection").classList.toggle("offline", !live);
+  }
+}
+async function think(side = "enemy") {
+  if (localOnly || mode !== "play" || paused) return;
+  const brain = brains[side],
+    token = generation;
+  const state =
+    side === "enemy"
+      ? duelState(enemy, player, persona, history)
+      : duelState(player, enemy, playerPersona, history);
+  const status = await requestDecision(brain, state, {
+    apiBase,
+    now: () => clock,
+    isCurrent: () => token === generation && mode === "play",
+  });
+  if (status === "stale" || status === "busy") return;
+  const prefix = side === "player" ? "player-" : "";
+  $(prefix + "brain-status").textContent =
+    status === "live" ? "LIVE" : battleMode === "ai" ? "WAITING" : "LOCAL";
+  if (status === "live") {
+    const result = brain.decision;
+    $(prefix + "intent").textContent =
       `${result.tactic} · ${result.attack_direction} · ${result.movement.replaceAll("_", " ")}`;
-    $("latency").textContent =
-      `${result.latency} ms · ${result.model} · ${liveCount} decisions`;
-    $("probabilities").replaceChildren();
+    $(prefix + "latency").textContent =
+      `${result.latency} ms · ${result.model} · ${brain.liveCount} decisions`;
+    $(prefix + "probabilities").replaceChildren();
     for (const [key, p] of Object.entries(result.probabilities.tactic)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)) {
@@ -676,24 +732,21 @@ async function think() {
       row.className = "prob";
       const name = document.createElement("span");
       name.textContent = key.toUpperCase();
-      const bar = document.createElement("div");
-      const fill = document.createElement("i");
+      const bar = document.createElement("div"),
+        fill = document.createElement("i");
       fill.style.width = `${p * 100}%`;
       bar.append(fill);
       const num = document.createElement("b");
       num.textContent = `${Math.round(p * 100)}%`;
       row.append(name, bar, num);
-      $("probabilities").append(row);
+      $(prefix + "probabilities").append(row);
     }
-  } catch (e) {
-    failures++;
-    $("connection").textContent = "JEV · OFFLINE";
-    $("connection").classList.add("offline");
-    $("brain-status").textContent = "LOCAL";
-    $("latency").textContent = "Local sparring fallback · retrying JEV";
-  } finally {
-    pending = false;
-  }
+  } else
+    $(prefix + "latency").textContent =
+      battleMode === "ai"
+        ? "JEV unavailable · waiting and retrying"
+        : "Local sparring fallback · retrying JEV";
+  updateConnection();
 }
 let localPlan = null,
   localPlanAt = -10;
@@ -720,10 +773,31 @@ function localDecision() {
   });
 }
 function ai(dt) {
-  const d = decision && clock - decisionAt < 5 ? decision : localDecision();
-  stepAI(enemyController, enemy, player, d, dt);
+  if (battleMode === "ai") {
+    const blue = liveDecision(brains.player, clock),
+      red = liveDecision(brains.enemy, clock);
+    if (!blue || !red) {
+      player.moving = enemy.moving = false;
+      return;
+    }
+    stepAI(playerController, player, enemy, blue, dt);
+    stepAI(enemyController, enemy, player, red, dt);
+  } else {
+    const brain = brains.enemy;
+    const d =
+      brain.decision && clock - brain.decisionAt < 5
+        ? brain.decision
+        : localDecision();
+    stepAI(enemyController, enemy, player, d, dt);
+  }
 }
 function impact(a, b, strike, outcome) {
+  if (battleMode === "ai") {
+    history.push(
+      `${a === player ? "blue" : "red"} used ${strike.type} from ${strike.dir}: ${outcome}`,
+    );
+    history = history.slice(-8);
+  }
   if (["hit", "block", "parry", "break", "counter"].includes(outcome))
     hitstop = outcome === "parry" ? 0.025 : outcome === "hit" ? 0.012 : 0;
   if (outcome === "hit" || outcome === "break") {
@@ -733,9 +807,11 @@ function impact(a, b, strike, outcome) {
     announce(
       outcome === "break"
         ? "GUARD BROKEN"
-        : a === player
-          ? "STRIKE"
-          : "WOUNDED",
+        : battleMode === "ai"
+          ? `${a === player ? "BLUE" : "RED"} HIT`
+          : a === player
+            ? "STRIKE"
+            : "WOUNDED",
       0.25,
     );
   } else if (outcome === "block" || outcome === "parry") {
@@ -847,7 +923,7 @@ function simulate(dt) {
     return;
   }
   stepDuel(player, enemy, dt, {
-    move: movementVector(),
+    move: battleMode === "ai" ? { x: 0, z: 0 } : movementVector(),
     enemyStep: ai,
     onImpact: impact,
   });
@@ -875,7 +951,22 @@ function frame(now) {
       accumulator -= 1 / 120;
       simulate(1 / 120);
     }
-    if (!localOnly && clock - lastBrain > (failures ? 3 : 0.65)) think();
+    const interval = battleMode === "ai" ? 1.1 : 0.65;
+    if (
+      !localOnly &&
+      clock - brains.enemy.lastBrain > (brains.enemy.failures ? 3 : interval)
+    )
+      think("enemy");
+    if (battleMode === "ai") {
+      if (
+        !localOnly &&
+        clock - brains.player.lastBrain >
+          (brains.player.failures ? 3 : interval) &&
+        clock - brains.enemy.lastBrain > 0.3
+      )
+        think("player");
+      updateConnection();
+    }
   } else accumulator = 0;
   if (!paused) {
     animateKnight(pVisual, player, enemy, dt);
@@ -954,26 +1045,30 @@ function frame(now) {
   $("combat-read").classList.toggle("inactive", !incoming);
   $("attack-read").textContent = incoming
     ? enemy.action === "guardbreak"
-      ? "GRAB · G TO COUNTER"
+      ? battleMode === "ai"
+        ? "RED GRAB"
+        : "GRAB · G TO COUNTER"
       : `${enemy.action.toUpperCase()} · ${enemy.attackDir.toUpperCase()}`
     : "";
   $("attack-progress").style.width = incoming
     ? `${Math.min(100, (enemy.elapsed / enemy.wind) * 100)}%`
     : "0%";
   $("player-read").textContent =
-    player.grabbed > 0
-      ? "G · COUNTER NOW"
-      : player.exhausted
-        ? "EXHAUSTED · RECOVER"
-        : player.buffer
-          ? "FOLLOW-UP BUFFERED"
-          : player.action === "parry"
-            ? "PARRY"
-            : player.chain > 1
-              ? `CHAIN ${player.chain}/4`
-              : player.stamina < 20
-                ? "LOW STAMINA"
-                : "";
+    battleMode === "ai"
+      ? `BLUE · ${player.action.toUpperCase()} · ${player.guard.toUpperCase()}`
+      : player.grabbed > 0
+        ? "G · COUNTER NOW"
+        : player.exhausted
+          ? "EXHAUSTED · RECOVER"
+          : player.buffer
+            ? "FOLLOW-UP BUFFERED"
+            : player.action === "parry"
+              ? "PARRY"
+              : player.chain > 1
+                ? `CHAIN ${player.chain}/4`
+                : player.stamina < 20
+                  ? "LOW STAMINA"
+                  : "";
   if (noticeTimer > 0) {
     noticeTimer -= dt;
     if (noticeTimer <= 0) $("notice").textContent = "";
@@ -1044,9 +1139,13 @@ window.__IRON_VOW__ = {
     eWins,
     player: { ...player },
     enemy: { ...enemy },
-    liveCount,
-    decision,
-    failures,
+    battleMode,
+    playerPersona,
+    persona,
+    liveCount: brains.enemy.liveCount,
+    decision: brains.enemy.decision,
+    failures: brains.enemy.failures,
+    brains: { player: { ...brains.player }, enemy: { ...brains.enemy } },
     ai: {
       reactions: enemyController.reactions,
       lastReaction: enemyController.lastReaction,
