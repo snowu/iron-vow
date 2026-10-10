@@ -21,8 +21,9 @@ const $ = (id) => document.getElementById(id),
   canvas = $("arena");
 const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const localOnly = import.meta.env.VITE_STATIC_HOST === "true" && !apiBase;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(1);
+let retro = true;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#101820");
@@ -34,7 +35,8 @@ scene.add(new THREE.HemisphereLight("#e6f5ff", "#233442", 2));
 const sun = new THREE.DirectionalLight("#ffffff", 2.2);
 sun.position.set(-3, 8, 4);
 scene.add(sun);
-const material = (color) => new THREE.MeshLambertMaterial({ color });
+const material = (color) =>
+  new THREE.MeshLambertMaterial({ color, flatShading: true });
 const white = material("#e2e8e8"),
   dark = material("#15232e"),
   steel = material("#a6bac5"),
@@ -93,6 +95,27 @@ function elbow(shoulder, hand, a = 0.38, b = 0.36) {
     .addScaledVector(direction, along)
     .addScaledVector(bend, height);
 }
+const glowCanvas = document.createElement("canvas");
+glowCanvas.width = 64;
+glowCanvas.height = 64;
+const glowContext = glowCanvas.getContext("2d"),
+  gradient = glowContext.createRadialGradient(32, 32, 0, 32, 32, 32);
+gradient.addColorStop(0, "rgba(220,245,255,0.75)");
+gradient.addColorStop(0.18, "rgba(150,210,235,0.25)");
+gradient.addColorStop(1, "rgba(100,180,220,0)");
+glowContext.fillStyle = gradient;
+glowContext.fillRect(0, 0, 64, 64);
+const glowTexture = new THREE.CanvasTexture(glowCanvas);
+const spark = mesh(
+  new THREE.SphereGeometry(0.03, 6, 4),
+  new THREE.MeshBasicMaterial({
+    color: "#ffe8b8",
+    transparent: true,
+    opacity: 0,
+  }),
+  scene,
+);
+let sparkUntil = 0;
 function fencerModel(color) {
   const root = new THREE.Group();
   scene.add(root);
@@ -140,6 +163,40 @@ function fencerModel(color) {
     new THREE.MeshBasicMaterial({ color: "#eaf8ff" }),
     body,
   );
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: glowTexture,
+      color,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  glow.scale.set(0.15, 0.15, 1);
+  body.add(glow);
+  const trailGeometry = new THREE.BufferGeometry();
+  trailGeometry.setAttribute(
+    "position",
+    new THREE.BufferAttribute(new Float32Array(48), 3),
+  );
+  trailGeometry.setAttribute(
+    "color",
+    new THREE.BufferAttribute(new Float32Array(48), 3),
+  );
+  const trail = new THREE.Line(
+    trailGeometry,
+    new THREE.LineBasicMaterial({
+      color,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  trail.frustumCulled = false;
+  scene.add(trail);
   const shadow = mesh(
     new THREE.CircleGeometry(0.55, 24),
     new THREE.MeshBasicMaterial({
@@ -166,6 +223,9 @@ function fencerModel(color) {
     blade,
     grip,
     tip,
+    glow,
+    trail,
+    trace: [],
   };
 }
 const visuals = [fencerModel("#57c5da"), fencerModel("#ef776d")];
@@ -268,8 +328,11 @@ function keydown(e) {
     announce("FEINT", 0.25);
   if (key === "e" && state.phase === "fence" && disengage(f))
     announce("DISENGAGE", 0.25);
-  if (["1", "2", "3"].includes(key) && f.action === "ready")
-    f.line = ["high", "inside", "outside"][Number(key) - 1];
+  if (["1", "2", "3"].includes(key)) {
+    const line = ["high", "inside", "outside"][Number(key) - 1];
+    if (["ready", "recover"].includes(f.action)) f.line = line;
+    else if (state.phase === "fence") disengage(f, line);
+  }
 }
 window.addEventListener("keydown", keydown);
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
@@ -427,6 +490,10 @@ function simulate(dt) {
       announce(`${who} · PARRY — RIPOSTE`, 0.35);
       tone(1300);
     }
+    if (e.point) {
+      spark.position.set(e.point.x, e.point.y, 0);
+      sparkUntil = clock + 0.09;
+    }
     if (e.type === "beat") {
       announce("BLADE BEAT", 0.3);
       tone(500);
@@ -449,25 +516,29 @@ function simulate(dt) {
     autoUntil = clock + 3;
   }
 }
-function animate(v, f, dt) {
-  const g = geometry(f),
+function animate(v, f, other, dt) {
+  const g = geometry(f, other),
     ext = g.extension;
   v.root.position.set(f.x, 0, 0);
   v.root.rotation.y = f.side === 1 ? 0 : Math.PI;
   v.body.position.x = g.lunge * 0.18;
   v.body.position.y = 0;
+  v.torso.rotation.z = -0.08 - g.lunge * 0.22;
   v.suit.emissive.setRGB(f.flash * 0.5, f.flash * 0.6, f.flash * 0.8);
   const shoulder = point(0.18, 1.45, 0.09),
-    hand = point(g.hand.x - g.lunge * 0.18, g.hand.y, 0.09);
+    hand = point(g.hand.x - g.lunge * 0.18, g.hand.y, 0);
   const joint = elbow(shoulder, hand);
   placeSegment(v.arms[0], shoulder, joint);
   placeSegment(v.arms[1], joint, hand);
   v.hand.position.copy(hand);
-  const tip = point(g.localTip.x - g.lunge * 0.18, g.localTip.y, 0.09);
+  const tip = point(g.localTip.x - g.lunge * 0.18, g.localTip.y, 0);
   const direction = tip.clone().sub(hand).normalize();
   v.guard.position.copy(hand).addScaledVector(direction, 0.075);
   v.guard.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction);
   v.tip.position.copy(tip);
+  v.glow.position.copy(tip);
+  v.tip.scale.setScalar(f.contactFlash > 0 ? 1.3 : 1);
+  v.tip.material.color.set(f.contactFlash > 0 ? "#ffe5a1" : "#eaf8ff");
   placeSegment(v.blade, hand.clone().addScaledVector(direction, 0.09), tip);
   placeSegment(v.grip, hand.clone().addScaledVector(direction, -0.1), hand);
   const freeShoulder = point(-0.08, 1.46, -0.12),
@@ -489,12 +560,44 @@ function animate(v, f, dt) {
   v.feet[0].position.copy(front);
   v.feet[1].position.copy(back);
   v.feet[1].rotation.y = Math.PI / 2;
+  v.root.updateMatrixWorld(true);
+  const worldTip = v.tip.getWorldPosition(new THREE.Vector3());
+  v.trace = v.trace.filter((p) => clock - p.time < 0.11);
+  if (
+    mode === "play" &&
+    !paused &&
+    state.phase === "fence" &&
+    (!v.trace.length || worldTip.distanceTo(v.trace[0].point) > 0.01)
+  )
+    v.trace.unshift({ point: worldTip, time: clock });
+  v.trace.length = Math.min(v.trace.length, 16);
+  const positions = v.trail.geometry.attributes.position,
+    colors = v.trail.geometry.attributes.color;
+  v.trace.forEach((p, i) => {
+    positions.setXYZ(i, p.point.x, p.point.y, p.point.z);
+    const fade = Math.max(0, 1 - (clock - p.time) / 0.11);
+    colors.setXYZ(i, fade, fade, fade);
+  });
+  positions.needsUpdate = true;
+  colors.needsUpdate = true;
+  v.trail.geometry.setDrawRange(0, v.trace.length);
+  v.trail.visible = v.trace.length > 1;
 }
 function resize() {
+  const ratio = retro
+    ? Math.min(1, 720 / innerWidth, 480 / innerHeight)
+    : Math.min(devicePixelRatio, 1.5);
+  renderer.setPixelRatio(ratio);
   renderer.setSize(innerWidth, innerHeight);
+  canvas.style.imageRendering = retro ? "pixelated" : "auto";
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 }
+$("style").onclick = () => {
+  retro = !retro;
+  $("style").textContent = retro ? "STYLE PS1" : "STYLE CLEAN";
+  resize();
+};
 window.addEventListener("resize", resize);
 resize();
 function hud() {
@@ -579,7 +682,8 @@ function frame(now) {
     reset();
   if (clock > noticeUntil) $("notice").textContent = "";
   hud();
-  for (let i = 0; i < 2; i++) animate(visuals[i], state.fencers[i], dt);
+  for (let i = 0; i < 2; i++)
+    animate(visuals[i], state.fencers[i], state.fencers[1 - i], dt);
   const middle = (state.fencers[0].x + state.fencers[1].x) / 2,
     gap = Math.abs(state.fencers[1].x - state.fencers[0].x),
     distance = Math.max(
@@ -591,6 +695,7 @@ function frame(now) {
   camera.position.x = THREE.MathUtils.damp(camera.position.x, middle, 5, dt);
   camera.position.z = THREE.MathUtils.damp(camera.position.z, distance, 5, dt);
   camera.lookAt(middle, 0.95, 0);
+  spark.material.opacity = Math.max(0, (sparkUntil - clock) / 0.09) * 0.7;
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -611,6 +716,10 @@ window.__IRON_VOW__ = {
     lights: [...state.lights],
     events: state.events.map((e) => ({ ...e })),
     brains: { player: { ...brains[0] }, enemy: { ...brains[1] } },
+    expectedTips: state.fencers.map(
+      (f, i) => geometry(f, state.fencers[1 - i]).tip,
+    ),
+    retro,
     rig: visuals.map((v) => ({
       hand: v.hand.getWorldPosition(new THREE.Vector3()).toArray(),
       tip: v.tip.getWorldPosition(new THREE.Vector3()).toArray(),

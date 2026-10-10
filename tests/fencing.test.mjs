@@ -63,7 +63,7 @@ test("matching timed parry displaces blade and allows immediate riposte", () => 
   const s = close(1.9),
     [a, b] = s.fencers;
   command(a, "thrust");
-  run(s, 0.075);
+  run(s, 0.04);
   command(b, "parry");
   run(s, 0.04);
   assert.equal(b.parries, 1);
@@ -152,11 +152,62 @@ test("weapon geometry keeps hand within articulated arm reach", () => {
 test("blade beat creates enough time to prepare a thrust without itself scoring", () => {
   const s = close(1.9);
   command(s.fencers[0], "beat");
-  run(s, 0.3);
+  run(s, 0.11);
   assert.deepEqual(s.score, [0, 0]);
-  assert.ok(s.fencers[1].bladeLost > 0.2);
+  assert.ok(s.fencers[1].bladeLost > 0.15);
   assert.equal(command(s.fencers[1], "parry"), false);
   assert.equal(command(s.fencers[0], "thrust"), true);
   run(s, 0.3);
   assert.deepEqual(s.score, [1, 0]);
+});
+
+test("feint, change line, and buffered thrust form a compound attack against a drawn parry", () => {
+  const s = close(1.9),
+    [a, b] = s.fencers;
+  command(a, "lunge");
+  run(s, 0.025);
+  command(b, "parry");
+  assert.ok(feint(a));
+  a.line = "outside";
+  assert.ok(command(a, "thrust"));
+  assert.equal(a.queue, "thrust");
+  run(s, 0.3);
+  assert.deepEqual(s.score, [1, 0]);
+  assert.equal(a.attackLine, "outside");
+});
+test("resting blades stay outside opposing torso and mask at minimum distance", () => {
+  const s = close(RULES.minimumGap);
+  for (const f of s.fencers) {
+    const foe = s.fencers.find((other) => other !== f),
+      g = geometry(f, foe);
+    assert.ok((g.tip.x - foe.x) * f.side <= -0.25 || g.tip.y > 1.96);
+  }
+});
+test("a scored point stops at the target surface throughout the double-touch window", () => {
+  const s = close(1.9);
+  command(s.fencers[0], "thrust");
+  while (!s.lights[0]) step(s, 1 / 120);
+  const contact = geometry(s.fencers[0], s.fencers[1]).tip;
+  assert.ok(contact.x <= geometry(s.fencers[1], s.fencers[0]).torso.x - 0.249);
+  run(s, 0.04);
+  assert.deepEqual(geometry(s.fencers[0], s.fencers[1]).tip, contact);
+});
+test("a blade beat requires crossing blades and cannot displace an out-of-reach opponent", () => {
+  const s = close(4);
+  command(s.fencers[0], "beat");
+  run(s, 0.15);
+  assert.equal(s.fencers[1].bladeLost, 0);
+  assert.ok(!s.events.some((e) => e.type === "beat"));
+});
+test("disengage follows a continuous curved point path instead of teleporting lines", () => {
+  const s = close(2.3),
+    f = s.fencers[0];
+  command(f, "lunge");
+  run(s, 0.055);
+  const before = geometry(f).tip;
+  assert.ok(disengage(f, "high"));
+  const immediately = geometry(f).tip;
+  assert.deepEqual(immediately, before);
+  run(s, 0.025);
+  assert.notDeepEqual(geometry(f).tip, before);
 });

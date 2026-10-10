@@ -23,6 +23,7 @@ export function fencingController(persona) {
     parries: 0,
     followup: null,
     followupUntil: 0,
+    feintedLine: null,
   };
 }
 const lineMap = { top: "high", left: "inside", right: "outside" };
@@ -48,7 +49,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.response = {
       reaction,
       line: foe.attackLine,
-      at: c.time + (c.persona === "raider" ? 0.145 : 0.11),
+      at: c.time + (c.persona === "raider" ? 0.095 : 0.07),
     };
   }
   if (c.response && c.time >= c.response.at) {
@@ -61,10 +62,11 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     else if (r.reaction === "interrupt") command(self, "thrust");
     c.cooldown = 0.12;
   }
-  if (c.feint && self.action === "lunge" && self.elapsed >= 0.085) {
+  if (c.feint && self.action === "lunge" && self.elapsed >= 0.045) {
+    c.feintedLine = self.attackLine;
     feint(self);
     c.feint = false;
-    c.cooldown = 0.14;
+    c.cooldown = 0.075;
     c.followup = pick("after_feint") || "light";
     c.followupUntil = c.time + 1;
   }
@@ -78,7 +80,21 @@ export function stepFencingAI(c, self, foe, decision, dt) {
       return 0;
     }
   }
-  if (self.action !== "ready") return 0;
+  if (
+    self.action === "beat" &&
+    self.connected &&
+    self.elapsed > 0.1 &&
+    command(self, "thrust")
+  ) {
+    c.cooldown = MOVES.thrust.duration;
+    return 0;
+  }
+  if (self.action !== "ready")
+    return decision?.movement === "retreat"
+      ? -0.65
+      : decision?.movement === "advance"
+        ? 0.55
+        : 0;
   if (self.stamina < 18) return -0.7;
   const tactic = c.followup || decision?.tactic || "light";
   let move = decision?.movement || "advance";
@@ -98,6 +114,8 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   if (c.cooldown > 0 || c.response) return footwork;
   self.line =
     lineMap[pick("attack_direction")] || lines[Math.floor(Math.random() * 3)];
+  if (c.followup && self.line === c.feintedLine)
+    self.line = lines[(lines.indexOf(self.line) + 1) % 3];
   if (tactic === "defend" || tactic === "recover") {
     c.cooldown = 0.15;
     return distance > 3 ? 0.25 : footwork;
@@ -118,7 +136,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   if (command(self, type)) {
     c.followup = null;
     c.feint = tactic === "feint";
-    c.cooldown = MOVES[type].duration + (c.persona === "raider" ? 0.08 : 0.16);
+    c.cooldown = MOVES[type].duration + (c.persona === "raider" ? 0.025 : 0.06);
   }
   return footwork;
 }

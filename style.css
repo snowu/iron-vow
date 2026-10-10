@@ -438,3 +438,26 @@ dd {
     bottom: 80px;
   }
 }
+
+@media (max-width: 760px) {
+  #insights {
+    display: none;
+  }
+  #style {
+    font-size: 7px;
+    padding: 7px;
+  }
+  header {
+    gap: 8px;
+  }
+  .brand span {
+    font-size: 8px;
+  }
+  nav {
+    gap: 5px;
+  }
+  #connection {
+    max-width: 90px;
+    line-height: 1.5;
+  }
+}

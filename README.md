@@ -4,7 +4,7 @@ An independent browser fencing prototype inspired by épée. Two fencers, a stra
 
 Advance and retreat to control distance. A quick thrust scores close up; a committed lunge adds reach through actual movement. Timed matching parries create riposte openings. Disengage to change blade line, feint early preparation, or beat the blade before attacking. Holding guard does not automatically block. Retreat has no invulnerability: it works only if the point falls short.
 
-Touch detection sweeps the weapon point against a simplified whole-body target, using the same coordinates as the renderer. The simulation runs at 120 Hz. A 45 ms double-touch window allows both fencers to score, then play halts for 1.25 seconds and resets to en garde. First to five with a lead wins; a double at 4–4 continues at 5–5. This is an inspired game, not an official rules simulator: no refereeing, penalties, right-of-way, match clock, or detailed limb hitboxes yet.
+Touch detection sweeps the weapon point against a simplified whole-body target, using the same coordinates as the renderer. The simulation runs at 120 Hz. A 45 ms double-touch window allows both fencers to score, then play halts for 0.7 seconds and resets to en garde. First to five with a lead wins; a double at 4–4 continues at 5–5. This is an inspired game, not an official rules simulator: no refereeing, penalties, right-of-way, match clock, or detailed limb hitboxes yet.
 
 ## Controls
 
@@ -48,3 +48,9 @@ Node loads the existing `/home/snow/.config/typesafe/env` with `--env-file`; no 
 `src/fencing.js` is the active rules/geometry module; `src/fencing-ai.js` is the fencing controller and API state adapter. `src/main.js` renders the piste, solves arm joints, and handles UI/input. Older melee modules and tests remain as historical code; old browser scripts and balance reports do not validate this fencing game. `npm run test:browser` points to the active fencing check.
 
 The current focus is spacing, readable point motion, and the attack–parry–riposte loop. Animation, foot placement, blade contact, collision detail, and balancing still need player feedback and refinement.
+
+## Current combat and visual pass
+
+Thrusts take 280 ms including recovery; lunges take 440 ms. Footwork remains available through preparation and recovery, and defense can cancel early anticipation or late recovery. Feint with F, choose another line, and buffer the next thrust while recovering. Disengages trace a short curved path; parries stay committed to their original line. Blade beats require crossing blade segments and briefly displace the opponent's weapon, permitting a follow-up thrust. Scored points stop at the target surface and resting points lift clear of nearby bodies.
+
+The default rendering uses a PS1-inspired low-resolution buffer and faceted materials, with a clean rendering toggle. Weapon points have a small glow and a faint trail lasting 110 ms. The models remain procedural; this is not a finished retro art direction.
