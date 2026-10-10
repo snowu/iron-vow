@@ -39,8 +39,7 @@ const material = (color) =>
   new THREE.MeshLambertMaterial({ color, flatShading: true });
 const white = material("#e2e8e8"),
   dark = material("#15232e"),
-  steel = material("#a6bac5"),
-  floor = material("#283c49");
+  steel = material("#a6bac5");
 function mesh(geo, mat, parent = scene) {
   const m = new THREE.Mesh(geo, mat);
   parent.add(m);
@@ -51,27 +50,65 @@ function box(w, h, d, mat, x, y, z, parent = scene) {
   m.position.set(x, y, z);
   return m;
 }
-box(17, 0.14, 2.1, floor, 0, -0.09, 0);
-box(200, 0.1, 200, material("#17252f"), 0, -0.24, 0);
-for (const z of [-1, 1]) box(17, 0.015, 0.025, steel, 0, 0.001, z);
+// A small evening fencing salle: wood floor, plaster walls, and a clear piste.
+const wood = material("#51463e"),
+  wall = material("#343f45"),
+  trim = material("#1c282f");
+box(30, 0.12, 18, wood, 0, -0.19, 0);
+for (let z = -8; z <= 8; z += 0.65)
+  box(30, 0.008, 0.018, material("#3e3935"), 0, -0.122, z);
+box(17, 0.1, 2.1, material("#687477"), 0, -0.06, 0);
+for (const z of [-1, 1])
+  box(17, 0.012, 0.032, material("#b7b9aa"), 0, 0.002, z);
 for (const x of [-6.5, -4, -2, 0, 2, 4, 6.5])
   box(
     0.035,
-    0.015,
+    0.012,
     2,
-    material(Math.abs(x) === 6.5 ? "#ef776d" : "#506e7e"),
+    material(Math.abs(x) === 6.5 ? "#9a6a5a" : "#9ba7a5"),
     x,
-    0.002,
+    0.004,
     0,
   );
-for (let x = -8; x <= 8; x += 0.2) box(0.005, 0.009, 2, floor, x, 0.004, 0);
-for (const x of [-5, 5]) {
-  box(0.09, 3.8, 0.09, dark, x, 1.6, -3);
-  box(0.09, 0.1, 5, steel, x, 3.5, -0.5);
+for (let x = -8; x <= 8; x += 0.5)
+  box(0.008, 0.008, 2, material("#58676b"), x, 0.002, 0);
+box(30, 7, 0.2, wall, 0, 3.2, -4.5);
+box(30, 0.22, 0.12, trim, 0, 0.1, -4.32);
+box(30, 0.08, 0.12, material("#79837f"), 0, 2.5, -4.32);
+for (const x of [-10, -5, 0, 5, 10]) {
+  box(0.18, 6, 0.18, trim, x, 2.8, -4.25);
+  box(2.7, 2.6, 0.08, material("#182a34"), x + 2.45, 3.4, -4.32);
+  for (const shift of [-0.85, 0, 0.85])
+    box(0.035, 2.6, 0.07, material("#839595"), x + 2.45 + shift, 3.4, -4.25);
+  box(2.7, 0.035, 0.08, steel, x + 2.45, 3.45, -4.23);
 }
+for (const x of [-6, 6]) {
+  box(2.4, 0.12, 0.6, wood, x, 0.43, -3.25);
+  for (const dx of [-0.8, 0.8]) box(0.07, 0.43, 0.45, trim, x + dx, 0.2, -3.25);
+  box(2.4, 0.12, 0.12, wood, x, 0.8, -3.47);
+}
+for (const x of [-3.5, 3.5]) {
+  box(2.7, 0.04, 0.6, trim, x, 4.9, 0);
+  box(
+    2.5,
+    0.025,
+    0.4,
+    new THREE.MeshBasicMaterial({ color: "#eadfc6" }),
+    x,
+    4.87,
+    0,
+  );
+}
+const warmLight = new THREE.DirectionalLight("#efd6aa", 0.55);
+warmLight.position.set(2, 5, 1);
+scene.add(warmLight);
 const unitY = new THREE.Vector3(0, 1, 0);
 function segment(radius, mat, parent) {
-  return mesh(new THREE.CylinderGeometry(radius, radius, 1, 7), mat, parent);
+  return mesh(
+    new THREE.CylinderGeometry(radius * 0.82, radius, 1, 8),
+    mat,
+    parent,
+  );
 }
 function placeSegment(m, a, b) {
   const delta = b.clone().sub(a);
@@ -100,8 +137,8 @@ glowCanvas.width = 64;
 glowCanvas.height = 64;
 const glowContext = glowCanvas.getContext("2d"),
   gradient = glowContext.createRadialGradient(32, 32, 0, 32, 32, 32);
-gradient.addColorStop(0, "rgba(220,245,255,0.75)");
-gradient.addColorStop(0.18, "rgba(150,210,235,0.25)");
+gradient.addColorStop(0, "rgba(240,250,255,0.95)");
+gradient.addColorStop(0.18, "rgba(150,210,235,0.5)");
 gradient.addColorStop(1, "rgba(100,180,220,0)");
 glowContext.fillStyle = gradient;
 glowContext.fillRect(0, 0, 64, 64);
@@ -123,24 +160,36 @@ function fencerModel(color) {
   root.add(body);
   const suit = white.clone(),
     accent = material(color);
-  const torso = mesh(
-    new THREE.CylinderGeometry(0.22, 0.19, 0.56, 10),
-    suit,
-    body,
-  );
+  const torso = mesh(new THREE.CapsuleGeometry(0.22, 0.26, 4, 10), suit, body);
   torso.position.set(-0.02, 1.24, 0);
+  torso.scale.set(0.9, 0.82, 0.85);
   torso.rotation.z = -0.08;
-  box(0.06, 0.35, 0.34, accent, -0.12, 1.2, 0, body);
+  const hips = mesh(new THREE.SphereGeometry(0.2, 10, 7), suit, body);
+  hips.position.set(-0.04, 0.94, 0);
+  hips.scale.set(0.85, 0.62, 0.88);
+  box(0.015, 0.42, 0.022, material("#b0bdb9"), 0.175, 1.2, 0, body);
+  box(0.045, 0.17, 0.3, accent, -0.17, 1.31, 0, body);
+  const hood = mesh(new THREE.SphereGeometry(0.205, 12, 9), suit, body);
+  hood.position.set(-0.025, 1.74, 0);
+  hood.scale.set(0.93, 1.1, 0.86);
   const mask = mesh(new THREE.SphereGeometry(0.22, 12, 9), dark, body);
-  mask.position.set(0.05, 1.74, 0);
-  mask.scale.set(0.95, 1.2, 0.9);
+  mask.position.set(0.1, 1.75, 0);
+  mask.scale.set(0.72, 1.05, 0.83);
   const bib = mesh(new THREE.CylinderGeometry(0.14, 0.19, 0.18, 9), suit, body);
   bib.position.set(0, 1.51, 0);
-  // Face mesh and curved guard distinguish fencing equipment from armor.
-  for (let y = 1.63; y < 1.91; y += 0.045)
-    box(0.008, 0.008, 0.27, steel, 0.247, y, 0, body);
-  for (let z = -0.1; z <= 0.1; z += 0.04)
-    box(0.008, 0.23, 0.005, steel, 0.25, 1.76, z, body);
+  // Curved mesh follows the face rather than a flat robot visor.
+  for (let dy = -0.15; dy <= 0.15; dy += 0.045) {
+    const points = [];
+    for (let z = -0.13; z <= 0.13; z += 0.026) {
+      const q = 1 - (dy / 0.23) ** 2 - (z / 0.183) ** 2;
+      if (q > 0) points.push(point(0.1 + 0.159 * Math.sqrt(q), 1.75 + dy, z));
+    }
+    const curve = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({ color: "#82918e" }),
+    );
+    body.add(curve);
+  }
   const arms = [segment(0.075, suit, body), segment(0.065, suit, body)];
   const free = [segment(0.07, suit, body), segment(0.06, suit, body)];
   const legs = [
@@ -150,9 +199,18 @@ function fencerModel(color) {
     segment(0.075, suit, root),
   ];
   const feet = [
-    box(0.3, 0.1, 0.17, accent, 0, 0, 0, root),
-    box(0.3, 0.1, 0.17, accent, 0, 0, 0, root),
+    box(0.29, 0.085, 0.16, material("#c4d0ca"), 0, 0, 0, root),
+    box(0.29, 0.085, 0.16, material("#c4d0ca"), 0, 0, 0, root),
   ];
+  const joints = Array.from({ length: 4 }, (_, i) =>
+    mesh(
+      new THREE.SphereGeometry(i < 2 ? 0.072 : 0.075, 8, 6),
+      suit,
+      i < 2 ? body : root,
+    ),
+  );
+  const freeHand = mesh(new THREE.SphereGeometry(0.062, 8, 6), suit, body);
+  for (const foot of feet) box(0.1, 0.055, 0.165, accent, 0.075, 0.01, 0, foot);
   const hand = mesh(new THREE.SphereGeometry(0.075, 8, 6), suit, body);
   const guard = mesh(new THREE.SphereGeometry(0.12, 10, 7), steel, body);
   guard.scale.set(0.3, 1, 1);
@@ -168,12 +226,12 @@ function fencerModel(color) {
       map: glowTexture,
       color,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.7,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
   );
-  glow.scale.set(0.15, 0.15, 1);
+  glow.scale.set(0.23, 0.23, 1);
   body.add(glow);
   const trailGeometry = new THREE.BufferGeometry();
   trailGeometry.setAttribute(
@@ -190,7 +248,7 @@ function fencerModel(color) {
       color,
       vertexColors: true,
       transparent: true,
-      opacity: 0.18,
+      opacity: 0.36,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }),
@@ -219,6 +277,9 @@ function fencerModel(color) {
     legs,
     feet,
     hand,
+    joints,
+    freeHand,
+    mask,
     guard,
     blade,
     grip,
@@ -531,6 +592,7 @@ function animate(v, f, other, dt) {
   placeSegment(v.arms[0], shoulder, joint);
   placeSegment(v.arms[1], joint, hand);
   v.hand.position.copy(hand);
+  v.joints[0].position.copy(joint);
   const tip = point(g.localTip.x - g.lunge * 0.18, g.localTip.y, 0);
   const direction = tip.clone().sub(hand).normalize();
   v.guard.position.copy(hand).addScaledVector(direction, 0.075);
@@ -542,27 +604,32 @@ function animate(v, f, other, dt) {
   placeSegment(v.blade, hand.clone().addScaledVector(direction, 0.09), tip);
   placeSegment(v.grip, hand.clone().addScaledVector(direction, -0.1), hand);
   const freeShoulder = point(-0.08, 1.46, -0.12),
-    freeElbow = point(-0.35, 1.61, -0.16),
-    freeHand = point(-0.5 - ext * 0.12, 1.8, -0.12);
+    freeElbow = point(-0.3, 1.37 + ext * 0.06, -0.16),
+    freeHand = point(-0.43 - ext * 0.12, 1.6 + ext * 0.12, -0.12);
   placeSegment(v.free[0], freeShoulder, freeElbow);
   placeSegment(v.free[1], freeElbow, freeHand);
+  v.freeHand.position.copy(freeHand);
+  v.joints[1].position.copy(freeElbow);
+  v.mask.rotation.z = -0.03 - ext * 0.06;
   const walk =
     f.moving && f.action !== "lunge" ? Math.sin(f.travel * 9) * 0.16 : 0;
   const hip = point(-0.04 + g.lunge * 0.12, 0.91, 0);
   const front = point(0.35 + g.lunge * 0.34 + walk, 0.08, 0.13),
     back = point(-0.35 - walk, 0.08, -0.13);
   const frontKnee = point(0.26 + g.lunge * 0.18, 0.48, 0.13),
-    backKnee = point(-0.24, 0.48, -0.13);
+    backKnee = point(-0.24, 0.44, -0.13);
   placeSegment(v.legs[0], hip.clone().add(point(0, 0, 0.12)), frontKnee);
   placeSegment(v.legs[1], frontKnee, front);
   placeSegment(v.legs[2], hip.clone().add(point(0, 0, -0.12)), backKnee);
   placeSegment(v.legs[3], backKnee, back);
+  v.joints[2].position.copy(frontKnee);
+  v.joints[3].position.copy(backKnee);
   v.feet[0].position.copy(front);
   v.feet[1].position.copy(back);
   v.feet[1].rotation.y = Math.PI / 2;
   v.root.updateMatrixWorld(true);
   const worldTip = v.tip.getWorldPosition(new THREE.Vector3());
-  v.trace = v.trace.filter((p) => clock - p.time < 0.11);
+  v.trace = v.trace.filter((p) => clock - p.time < 0.17);
   if (
     mode === "play" &&
     !paused &&
@@ -575,7 +642,7 @@ function animate(v, f, other, dt) {
     colors = v.trail.geometry.attributes.color;
   v.trace.forEach((p, i) => {
     positions.setXYZ(i, p.point.x, p.point.y, p.point.z);
-    const fade = Math.max(0, 1 - (clock - p.time) / 0.11);
+    const fade = Math.max(0, 1 - (clock - p.time) / 0.17);
     colors.setXYZ(i, fade, fade, fade);
   });
   positions.needsUpdate = true;
