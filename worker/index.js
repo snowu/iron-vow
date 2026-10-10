@@ -63,6 +63,7 @@ export function combatState(input) {
   )
     throw new ClientError(400, "Invalid combat history");
   return {
+    ...(input.discipline === "fencing" ? { discipline: "fencing" } : {}),
     persona: input.persona,
     personality: personas[input.persona],
     distance: choice(input.distance, [

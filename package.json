@@ -8,7 +8,7 @@
     "build": "vite build",
     "test": "node --test tests/*.test.mjs",
     "balance": "node --env-file=/home/snow/.config/typesafe/env analysis/balance.mjs",
-    "test:browser": "node tests/browser.mjs",
+    "test:browser": "node tests/fencing-browser.mjs",
     "start": "node --env-file=/home/snow/.config/typesafe/env server.mjs --production",
     "play": "npm run build && npm start",
     "format": "prettier --write src tests analysis *.mjs index.html style.css README.md COMBAT_PLAN.md package.json",

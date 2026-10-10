@@ -3,178 +3,149 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Iron Vow • The Ashen Ring</title>
+    <title>Iron Vow — On the Piste</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <canvas id="arena" aria-label="3D sword fighting arena"></canvas>
-    <div class="vignette"></div>
+    <canvas id="arena" aria-label="Three-dimensional fencing piste"></canvas>
     <header>
-      <div class="brand">
-        IV <span>IRON VOW<small>THE ASHEN RING</small></span>
-      </div>
-      <div class="top-right">
-        <span id="connection" class="badge">JEV · CONNECTING</span
-        ><button id="quality">QUALITY HIGH</button
+      <a class="brand" href="#"
+        >IV <span>IRON VOW<small>ON THE PISTE</small></span></a
+      >
+      <nav>
+        <span id="connection">JEV · CONNECTING</span
         ><button id="sound">SOUND OFF</button
         ><button id="insights">JEV DETAILS</button
         ><button id="help">CONTROLS</button>
-      </div>
+      </nav>
     </header>
     <section id="hud" class="hidden">
-      <div class="fighter-hud player">
-        <div class="label">
-          <b id="player-name">YOU</b>
-          <span id="player-subtitle">THE EXILE</span>
-        </div>
-        <div class="health"><i id="p-health"></i></div>
-        <div class="stamina"><i id="p-stamina"></i></div>
+      <div class="fencer blue">
+        <span id="blue-name">YOU</span><b id="blue-score">0</b>
+        <div class="energy"><i id="blue-energy"></i></div>
+        <div id="blue-light" class="touch-light"></div>
       </div>
-      <div class="round">
-        <small>BEST OF THREE</small><b id="round">ROUND 1</b>
-        <div id="score">○ ○ &nbsp; / &nbsp; ○ ○</div>
+      <div class="bout">
+        <small>ÉPÉE INSPIRED · FIRST TO FIVE</small
+        ><strong id="phase">EN GARDE</strong
+        ><span id="distance">DISTANCE IS EVERYTHING</span>
       </div>
-      <div class="fighter-hud enemy">
-        <div class="label">
-          <span id="enemy-name">THE WARDEN</span>
-          <span id="enemy-brain-label">JEV</span>
-        </div>
-        <div class="health"><i id="e-health"></i></div>
-        <div class="stamina"><i id="e-stamina"></i></div>
+      <div class="fencer red">
+        <span id="red-name">THE TACTICIAN</span><b id="red-score">0</b>
+        <div class="energy"><i id="red-energy"></i></div>
+        <div id="red-light" class="touch-light"></div>
       </div>
     </section>
-    <div id="notice"></div>
-    <div id="combat-read" class="hidden">
-      <small id="enemy-guard"></small>
-      <strong id="attack-arrow"></strong>
-      <b id="attack-read"></b>
-      <div class="attack-meter"><i id="attack-progress"></i><span></span></div>
-    </div>
-    <small id="player-read" class="hidden"></small>
-    <div id="guard" class="hidden">
-      <button data-dir="top" class="top">▲</button
-      ><button data-dir="left" class="left">◀</button
-      ><button data-dir="right" class="right">▶</button
-      ><span id="guard-label">YOUR GUARD</span>
-    </div>
+    <div id="notice" role="status"></div>
+    <div id="readout" class="hidden"></div>
     <aside id="brain" class="hidden">
-      <div class="eyebrow" id="enemy-brain-caption">THE OPPONENT'S MIND</div>
-      <div class="brain-title">
-        <b id="brain-name">JEV</b> <span id="brain-status">Thinking…</span>
-      </div>
-      <p id="intent">Reading the arena</p>
-      <div id="probabilities"></div>
-      <small id="latency">Live decisions · typed probabilities</small>
+      <small>RED · JEV</small>
+      <p id="intent"></p>
+      <span id="latency"></span>
     </aside>
     <aside id="brain-player" class="hidden">
-      <div class="eyebrow">BLUE FIGHTER · JEV</div>
-      <div class="brain-title">
-        JEV <span id="player-brain-status">CONNECTING</span>
-      </div>
-      <p id="player-intent">Reading the arena</p>
-      <div id="player-probabilities"></div>
-      <small id="player-latency">Waiting for JEV</small>
+      <small>BLUE · JEV</small>
+      <p id="player-intent"></p>
+      <span id="player-latency"></span>
     </aside>
-    <div id="spectator-hint" class="hidden">JEV vs JEV · ESC TO PAUSE</div>
-    <div id="intro" class="panel">
-      <div class="eyebrow">A DUEL OF INTENT</div>
-      <h1>IRON<br /><em>VOW</em></h1>
-      <p>Attack. Dodge. Counter.<br />A duel against a live JEV opponent.</p>
+    <section id="intro" class="panel">
+      <small>FOOTWORK. DISTANCE. TIMING.</small>
+      <h1>ON THE<br /><em>PISTE.</em></h1>
+      <p>The point wins.<br />Draw the attack. Find your touch.</p>
       <div class="mode-select">
-        <button data-mode="human" class="selected">PLAY vs JEV</button>
-        <button data-mode="ai">JEV vs JEV</button>
+        <button data-mode="human" class="selected">YOU vs JEV</button
+        ><button data-mode="ai">JEV vs JEV</button>
       </div>
-      <label id="human-settings"
-        ><input id="manual-directions" type="checkbox" /> MANUAL DIRECTIONS
-        <small>Optional · mouse and arrow guard</small></label
-      >
       <div id="blue-select" class="hidden">
-        <label for="player-persona">BLUE FIGHTER</label>
-        <select id="player-persona">
-          <option value="raider">RAIDER</option>
-          <option value="warden">WARDEN</option>
-          <option value="duelist">DUELIST</option>
-        </select>
         <label
+          >BLUE FENCER
+          <select id="player-persona">
+            <option value="raider">THE PRESSER</option>
+            <option value="warden">THE TACTICIAN</option>
+            <option value="duelist">THE COUNTERFENCER</option>
+          </select></label
+        ><label
           ><input id="auto-rounds" type="checkbox" checked /> KEEP
-          DUELING</label
+          FENCING</label
         >
       </div>
-      <div class="select-label">RED FIGHTER / OPPONENT</div>
+      <small class="select-label">YOUR OPPONENT</small>
       <div class="personas">
-        <button class="selected" data-persona="warden">
-          01 <strong>WARDEN</strong
-          ><small>Disciplined · balanced</small></button
+        <button data-persona="warden" class="selected">
+          <b>TACTICIAN</b><span>Measure. Prepare. Commit.</span></button
         ><button data-persona="raider">
-          02 <strong>RAIDER</strong
-          ><small>Relentless · aggressive</small></button
+          <b>PRESSER</b><span>Take space. Force the touch.</span></button
         ><button data-persona="duelist">
-          03 <strong>DUELIST</strong><small>Patient · deceptive</small>
+          <b>COUNTERFENCER</b><span>Draw. Parry. Riposte.</span>
         </button>
       </div>
-      <button id="start" class="primary">ENTER THE RING <span>↗</span></button>
-      <div class="intro-footer">
-        3D DIRECTIONAL COMBAT <span id="intro-brain-label">POWERED BY JEV</span>
-      </div>
-    </div>
-    <div id="result" class="panel hidden">
-      <div class="eyebrow" id="result-label">ROUND OVER</div>
-      <h2 id="result-title">VICTORY</h2>
+      <button id="start" class="primary">EN GARDE ↗</button
+      ><small class="intro-note">3D FENCING PROTOTYPE · LIVE JEV TACTICS</small>
+    </section>
+    <section id="result" class="panel hidden">
+      <small>BOUT COMPLETE</small>
+      <h2 id="result-title"></h2>
       <p id="result-detail"></p>
-      <button id="next" class="primary">NEXT ROUND ↗</button
+      <button id="next" class="primary">FENCE AGAIN ↗</button
       ><button id="menu">CHANGE OPPONENT</button>
-    </div>
-    <div id="instructions" class="modal hidden">
+    </section>
+    <section id="instructions" class="modal hidden">
       <div>
         <button id="close-help">CLOSE ✕</button>
-        <h2>Read. React. Riposte.</h2>
+        <h2>Make them miss.</h2>
         <p>
-          Click to cut. Dodge a committed swing or press Shift just before
-          contact to parry. Attack during the opening. Enable Manual Directions
-          for full directional guard control.
+          Move along the piste. Extend your point for a quick thrust, or commit
+          your front foot to a longer lunge. A touch stops the exchange;
+          near-simultaneous touches score for both.
         </p>
         <dl>
-          <dt>W A S D</dt>
-          <dd>Move / circle enemy</dd>
-          <dt>← ↑ → or Q E R</dt>
-          <dd>Manual mode: left / top / right guard and attack direction</dd>
-          <dt>Left click / J</dt>
-          <dd>Light attack</dd>
+          <dt>D / →</dt>
+          <dd>Advance</dd>
+          <dt>A / ←</dt>
+          <dd>Retreat</dd>
+          <dt>Click / J</dt>
+          <dd>Quick thrust</dd>
           <dt>Right click / K</dt>
-          <dd>Heavy attack</dd>
-          <dt>F</dt>
-          <dd>Feint a heavy during windup</dd>
-          <dt>G</dt>
-          <dd>Guard break / counter incoming grab</dd>
-          <dt>SPACE</dt>
-          <dd>Dodge in your movement direction</dd>
-          <dt>SHIFT</dt>
+          <dd>Committed lunge</dd>
+          <dt>Shift</dt>
           <dd>
-            Timed parry · direction matches the incoming strike in assisted mode
+            Timed parry of the visible attack; thrust immediately to riposte
           </dd>
-          <dt>ESC</dt>
-          <dd>Pause / resume</dd>
+          <dt>Space</dt>
+          <dd>Fast retreat; avoid the point by moving out of reach</dd>
+          <dt>E</dt>
+          <dd>
+            Disengage during extension: change blade line to evade a parry
+          </dd>
+          <dt>F</dt>
+          <dd>Feint during early preparation</dd>
+          <dt>G</dt>
+          <dd>Beat the blade at close range, then attack</dd>
+          <dt>1 / 2 / 3</dt>
+          <dd>High / inside / outside blade line</dd>
+          <dt>Esc</dt>
+          <dd>Pause</dd>
         </dl>
         <p>
-          Inputs near recovery buffer into a four-hit chain. Stamina fuels
-          attacks and dodges. Guard breaks beat passive defense; dodges and a
-          timed G counter beat guard breaks. Dodge recovery can be punished. A
-          parry opens the enemy to a counterattack.
+          Whole-body target, first to five. No passive blocking, damage bars,
+          dodge invulnerability, or right-of-way. This is an épée-inspired
+          prototype with simplified target geometry.
         </p>
+      </div>
+    </section>
+    <div id="paused" class="modal hidden">
+      <div>
+        <h2>HALT.</h2>
+        <p>Press Escape to continue.</p>
       </div>
     </div>
     <footer id="controls" class="hidden">
-      <span><b>WASD</b> MOVE</span><span><b>SHIFT</b> TIMED PARRY</span
-      ><span><b>LMB / RMB</b> LIGHT / HEAVY</span><span><b>SPACE</b> DODGE</span
-      ><span><b>G</b> BREAK</span><span><b>F</b> FEINT</span
-      ><span><b>ARROWS</b> OPTIONAL DIRECTION</span>
+      <span><b>A / D</b> FOOTWORK</span><span><b>CLICK</b> THRUST</span
+      ><span><b>RMB</b> LUNGE</span><span><b>SHIFT</b> PARRY</span
+      ><span><b>SPACE</b> RETREAT</span
+      ><span><b>E / F</b> DISENGAGE / FEINT</span
+      ><span><b>G</b> BLADE BEAT</span>
     </footer>
-    <div id="paused" class="modal hidden">
-      <div>
-        <h2>PAUSED</h2>
-        <p>Press Escape to return to the ring.</p>
-      </div>
-    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

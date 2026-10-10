@@ -146,3 +146,32 @@ test("provider failures are handled without exposing upstream errors", async (t)
     error: "JEV temporarily unavailable",
   });
 });
+
+test("fencing clients reach JEV with fencing instructions and server-owned personality", async (t) => {
+  let sent;
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    sent = JSON.parse(init.body);
+    return new Response(
+      JSON.stringify({
+        model: "jev-test",
+        answers: Object.fromEntries(
+          Object.entries(sent.questions).map(([name, q]) => [
+            name,
+            { probabilities: { [Object.keys(q.criteria)[0]]: 1 } },
+          ]),
+        ),
+        usage: { input_tokens: 1 },
+      }),
+      { status: 200 },
+    );
+  });
+  const response = await worker.fetch(
+    request({ ...state, discipline: "fencing" }),
+    env(),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(sent.state.discipline, "fencing");
+  assert.match(sent.questions.tactic.instructions, /épée/);
+  assert.match(sent.state.personality, /épée/);
+  assert.equal(Object.keys((await response.json()).probabilities).length, 9);
+});

@@ -1,1230 +1,620 @@
-const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-const localOnly = import.meta.env.VITE_STATIC_HOST === "true" && !apiBase;
-function showLocalMode() {
-  document.getElementById("connection").textContent =
-    "LOCAL AI · JEV NOT CONNECTED";
-  document.getElementById("connection").classList.add("offline");
-  document.getElementById("brain-status").textContent = "LOCAL";
-  document.getElementById("brain-name").textContent = "LOCAL AI";
-  document.getElementById("enemy-brain-label").textContent = "LOCAL AI";
-  document.getElementById("intro-brain-label").textContent = "LOCAL SPARRING";
-  document.getElementById("latency").textContent =
-    "Static demo · connect a JEV backend for live decisions";
-}
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
-  fighter,
-  requestAttack,
-  requestDefense,
-  switchGuard,
-  counterBreak,
+  bout,
+  step,
+  command,
   feint,
-  dodge,
-  parry,
-  specs,
-  directions,
-} from "./combat.js";
-import { controller, stepAI } from "./ai.js";
-import { stepDuel } from "./world.js";
-import { yawToTarget } from "./facing.js";
-import { swordPose } from "./pose.js";
+  disengage,
+  geometry,
+  extension,
+  MOVES,
+  RULES,
+} from "./fencing.js";
 import {
-  createBrain,
-  duelState,
-  requestDecision,
-  liveDecision,
-} from "./brain.js";
+  fencingController,
+  stepFencingAI,
+  fencingState,
+  names,
+} from "./fencing-ai.js";
+import { createBrain, requestDecision, liveDecision } from "./brain.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("arena");
+const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const localOnly = import.meta.env.VITE_STATIC_HOST === "true" && !apiBase;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = false;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#0c1420");
-scene.fog = new THREE.FogExp2("#0c1420", 0.04);
-const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 120);
-camera.position.set(10, 7, 12);
-scene.add(new THREE.HemisphereLight("#b8dceb", "#1b2239", 1.55));
-const sun = new THREE.DirectionalLight("#e3f2ff", 2.1);
-sun.position.set(-6, 12, 5);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -15;
-sun.shadow.camera.right = 15;
-sun.shadow.camera.top = 15;
-sun.shadow.camera.bottom = -15;
-sun.shadow.bias = -0.0003;
+scene.background = new THREE.Color("#101820");
+scene.fog = new THREE.Fog("#101820", 50, 100);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+camera.position.set(0, 3.1, 10.8);
+camera.lookAt(0, 0.9, 0);
+scene.add(new THREE.HemisphereLight("#e6f5ff", "#233442", 2));
+const sun = new THREE.DirectionalLight("#ffffff", 2.2);
+sun.position.set(-3, 8, 4);
 scene.add(sun);
-const mats = {
-  stone: new THREE.MeshLambertMaterial({ color: "#263747" }),
-  edge: new THREE.MeshLambertMaterial({ color: "#131e2b" }),
-  metal: new THREE.MeshLambertMaterial({
-    color: "#35495d",
-  }),
-  dark: new THREE.MeshLambertMaterial({
-    color: "#111b2b",
-  }),
-  gold: new THREE.MeshLambertMaterial({
-    color: "#94b7c7",
-  }),
-  player: new THREE.MeshLambertMaterial({ color: "#23aabb" }),
-  enemy: new THREE.MeshLambertMaterial({ color: "#e46453" }),
-  skin: new THREE.MeshLambertMaterial({ color: "#a9967a" }),
-};
-function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene) {
+const material = (color) => new THREE.MeshLambertMaterial({ color });
+const white = material("#e2e8e8"),
+  dark = material("#15232e"),
+  steel = material("#a6bac5"),
+  floor = material("#283c49");
+function mesh(geo, mat, parent = scene) {
   const m = new THREE.Mesh(geo, mat);
-  m.position.set(x, y, z);
-  m.castShadow = true;
-  m.receiveShadow = true;
   parent.add(m);
   return m;
 }
-function box(w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) {
-  return mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z, parent);
+function box(w, h, d, mat, x, y, z, parent = scene) {
+  const m = mesh(new THREE.BoxGeometry(w, h, d), mat, parent);
+  m.position.set(x, y, z);
+  return m;
 }
-// A quiet training ring: the silhouettes and weapon paths carry the scene.
-mesh(new THREE.CylinderGeometry(9, 9.2, 0.5, 48), mats.edge, 0, -0.3, 0);
-mesh(new THREE.CylinderGeometry(8.9, 8.9, 0.1, 48), mats.stone, 0, -0.03, 0);
-const boundary = mesh(
-  new THREE.TorusGeometry(8.3, 0.035, 4, 80),
-  new THREE.MeshBasicMaterial({ color: "#5d7d85" }),
-  0,
-  0.04,
-  0,
-);
-boundary.rotation.x = Math.PI / 2;
-const ground = mesh(new THREE.PlaneGeometry(300, 300), mats.edge, 0, -0.6, 0);
-ground.rotation.x = -Math.PI / 2;
-const flames = [];
-for (let i = 0; i < 12; i++) {
-  const angle = (i * Math.PI) / 6;
-  const pillar = box(
-    0.35,
-    1.7,
-    0.35,
-    mats.edge,
-    Math.sin(angle) * 10.3,
-    0.4,
-    Math.cos(angle) * 10.3,
-  );
-  pillar.rotation.y = angle;
+box(17, 0.14, 2.1, floor, 0, -0.09, 0);
+box(200, 0.1, 200, material("#17252f"), 0, -0.24, 0);
+for (const z of [-1, 1]) box(17, 0.015, 0.025, steel, 0, 0.001, z);
+for (const x of [-6.5, -4, -2, 0, 2, 4, 6.5])
   box(
-    0.08,
-    0.9,
-    0.08,
-    new THREE.MeshBasicMaterial({ color: i % 2 ? "#ef7966" : "#51c8d1" }),
-    Math.sin(angle) * 10.05,
-    0.8,
-    Math.cos(angle) * 10.05,
+    0.035,
+    0.015,
+    2,
+    material(Math.abs(x) === 6.5 ? "#ef776d" : "#506e7e"),
+    x,
+    0.002,
+    0,
   );
+for (let x = -8; x <= 8; x += 0.2) box(0.005, 0.009, 2, floor, x, 0.004, 0);
+for (const x of [-5, 5]) {
+  box(0.09, 3.8, 0.09, dark, x, 1.6, -3);
+  box(0.09, 0.1, 5, steel, x, 3.5, -0.5);
 }
-scene.updateMatrixWorld(true);
-const staticByMaterial = new Map();
-for (const object of [...scene.children]) {
-  if (!object.isMesh || flames.includes(object)) continue;
-  const key = object.material.uuid;
-  const batch = staticByMaterial.get(key) || {
-    material: object.material,
-    geometries: [],
-  };
-  batch.geometries.push(
-    object.geometry.clone().applyMatrix4(object.matrixWorld),
-  );
-  staticByMaterial.set(key, batch);
-  scene.remove(object);
-  object.geometry.dispose();
+const unitY = new THREE.Vector3(0, 1, 0);
+function segment(radius, mat, parent) {
+  return mesh(new THREE.CylinderGeometry(radius, radius, 1, 7), mat, parent);
 }
-for (const batch of staticByMaterial.values()) {
-  const geometry = mergeGeometries(batch.geometries);
-  if (geometry) mesh(geometry, batch.material);
-  for (const g of batch.geometries) g.dispose();
+function placeSegment(m, a, b) {
+  const delta = b.clone().sub(a);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.scale.y = delta.length();
+  m.quaternion.setFromUnitVectors(unitY, delta.normalize());
 }
-function batchBone(bone) {
-  const batches = new Map();
-  for (const child of [...bone.children]) {
-    if (!child.isMesh) continue;
-    child.updateMatrix();
-    const batch = batches.get(child.material) || [];
-    batch.push(child);
-    batches.set(child.material, batch);
-  }
-  for (const [material, parts] of batches) {
-    if (parts.length < 2) continue;
-    const copies = parts.map((part) =>
-      part.geometry.clone().applyMatrix4(part.matrix),
-    );
-    const geometry = mergeGeometries(copies);
-    copies.forEach((copy) => copy.dispose());
-    if (!geometry) continue;
-    mesh(geometry, material, 0, 0, 0, bone);
-    // Preserve attachment transforms used by facing diagnostics.
-    parts.forEach((part) => {
-      part.visible = false;
-      part.geometry.dispose();
-    });
-  }
+function point(x, y, z = 0) {
+  return new THREE.Vector3(x, y, z);
 }
-
-function knight(color) {
+// Two-bone geometry: hands are reachable targets, not independent cosmetic objects.
+function elbow(shoulder, hand, a = 0.38, b = 0.36) {
+  const delta = hand.clone().sub(shoulder),
+    distance = delta.length();
+  const along = (a * a - b * b + distance * distance) / (2 * distance);
+  const height = Math.sqrt(Math.max(0, a * a - along * along));
+  const direction = delta.normalize(),
+    bend = new THREE.Vector3(direction.y, -direction.x, 0).normalize();
+  return shoulder
+    .clone()
+    .addScaledVector(direction, along)
+    .addScaledVector(bend, height);
+}
+function fencerModel(color) {
   const root = new THREE.Group();
   scene.add(root);
   const body = new THREE.Group();
   root.add(body);
-  const cloth = mats[color].clone();
-  mesh(new THREE.CylinderGeometry(0.3, 0.23, 0.65, 4), cloth, 0, 1.34, 0, body);
-  mesh(
-    new THREE.CylinderGeometry(0.25, 0.22, 0.25, 6),
-    cloth,
-    0,
-    0.96,
-    0,
+  const suit = white.clone(),
+    accent = material(color);
+  const torso = mesh(
+    new THREE.CylinderGeometry(0.22, 0.19, 0.56, 10),
+    suit,
     body,
   );
-  box(0.38, 0.3, 0.33, mats.metal, 0, 1.49, 0.045, body);
-  box(0.035, 0.25, 0.025, mats.gold, 0, 1.48, 0.222, body);
-  box(0.49, 0.08, 0.35, mats.dark, 0, 1.03, 0, body);
-  const helm = mesh(
-    new THREE.IcosahedronGeometry(0.21, 0),
-    mats.metal,
-    0,
-    1.97,
-    0,
+  torso.position.set(-0.02, 1.24, 0);
+  torso.rotation.z = -0.08;
+  box(0.06, 0.35, 0.34, accent, -0.12, 1.2, 0, body);
+  const mask = mesh(new THREE.SphereGeometry(0.22, 12, 9), dark, body);
+  mask.position.set(0.05, 1.74, 0);
+  mask.scale.set(0.95, 1.2, 0.9);
+  const bib = mesh(new THREE.CylinderGeometry(0.14, 0.19, 0.18, 9), suit, body);
+  bib.position.set(0, 1.51, 0);
+  // Face mesh and curved guard distinguish fencing equipment from armor.
+  for (let y = 1.63; y < 1.91; y += 0.045)
+    box(0.008, 0.008, 0.27, steel, 0.247, y, 0, body);
+  for (let z = -0.1; z <= 0.1; z += 0.04)
+    box(0.008, 0.23, 0.005, steel, 0.25, 1.76, z, body);
+  const arms = [segment(0.075, suit, body), segment(0.065, suit, body)];
+  const free = [segment(0.07, suit, body), segment(0.06, suit, body)];
+  const legs = [
+    segment(0.095, suit, root),
+    segment(0.075, suit, root),
+    segment(0.095, suit, root),
+    segment(0.075, suit, root),
+  ];
+  const feet = [
+    box(0.3, 0.1, 0.17, accent, 0, 0, 0, root),
+    box(0.3, 0.1, 0.17, accent, 0, 0, 0, root),
+  ];
+  const hand = mesh(new THREE.SphereGeometry(0.075, 8, 6), suit, body);
+  const guard = mesh(new THREE.SphereGeometry(0.12, 10, 7), steel, body);
+  guard.scale.set(0.3, 1, 1);
+  const blade = segment(0.012, steel, body),
+    grip = segment(0.027, dark, body);
+  const tip = mesh(
+    new THREE.SphereGeometry(0.025, 6, 4),
+    new THREE.MeshBasicMaterial({ color: "#eaf8ff" }),
     body,
   );
-  helm.scale.set(0.88, 1.2, 0.95);
-  const visor = box(
-    0.27,
-    0.045,
-    0.055,
-    new THREE.MeshBasicMaterial({
-      color: color === "player" ? "#90f4f8" : "#ffd0ac",
-    }),
-    0,
-    1.98,
-    0.2,
-    body,
-  );
-
-  const legs = [];
-  for (const side of [-1, 1]) {
-    const leg = new THREE.Group();
-    leg.position.set(side * 0.17, 0.9, 0);
-    body.add(leg);
-    box(0.16, 0.36, 0.18, mats.dark, 0, -0.18, 0, leg);
-    const knee = new THREE.Group();
-    knee.position.y = -0.36;
-    leg.add(knee);
-    box(0.15, 0.38, 0.18, mats.metal, 0, -0.19, 0, knee);
-    box(0.19, 0.12, 0.33, mats.dark, 0, -0.42, 0.08, knee);
-    leg.userData.knee = knee;
-
-    legs.push(leg);
-    mesh(
-      new THREE.IcosahedronGeometry(0.16, 0),
-      mats.metal,
-      side * 0.34,
-      1.65,
-      0,
-      body,
-    );
-  }
-  const arms = [];
-  for (const side of [-1, 1]) {
-    const arm = new THREE.Group();
-    arm.position.set(side * 0.32, 1.61, 0);
-    body.add(arm);
-    box(0.13, 0.29, 0.15, cloth, 0, -0.145, 0, arm);
-    const elbow = new THREE.Group();
-    elbow.position.y = -0.29;
-    arm.add(elbow);
-    box(0.14, 0.25, 0.17, mats.metal, 0, -0.125, 0, elbow);
-    box(0.13, 0.13, 0.13, mats.dark, 0, -0.3, 0, elbow);
-    const wrist = new THREE.Group();
-    wrist.position.y = -0.3;
-    elbow.add(wrist);
-    arm.userData.wrist = wrist;
-    arm.userData.elbow = elbow;
-    arms.push(arm);
-  }
-  const sword = new THREE.Group();
-  arms[1].userData.wrist.add(sword);
-  sword.position.set(0, 0, 0);
-  sword.rotation.x = Math.PI;
-  box(0.075, 0.28, 0.08, mats.dark, 0, 0.04, 0, sword);
-  box(0.42, 0.06, 0.09, mats.gold, 0, 0.22, 0, sword);
-  const bladeMaterial = mats.metal.clone();
-  box(0.075, 1.15, 0.025, bladeMaterial, 0, 0.82, 0, sword);
-  mesh(new THREE.ConeGeometry(0.055, 0.22, 4), bladeMaterial, 0, 1.4, 0, sword);
-  box(0.4, 0.28, 0.035, cloth, 0, 0.96, -0.23, body);
-  const ring = mesh(
-    new THREE.TorusGeometry(0.66, 0.025, 5, 40),
-    new THREE.MeshBasicMaterial({
-      color: color === "player" ? "#9ad4d3" : "#e88763",
-      transparent: true,
-      opacity: 0.7,
-    }),
-    0,
-    0.09,
-    0,
-    root,
-  );
-  ring.rotation.x = Math.PI / 2;
   const shadow = mesh(
-    new THREE.CircleGeometry(0.65, 24),
+    new THREE.CircleGeometry(0.55, 24),
     new THREE.MeshBasicMaterial({
-      color: "#060c13",
+      color: "#060c12",
       transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
+      opacity: 0.4,
     }),
-    0,
-    0.065,
-    0,
     root,
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.scale.set(1, 0.75, 1);
-  [
-    body,
-    ...arms,
-    ...legs,
-    ...arms.map((a) => a.userData.elbow),
-    ...legs.map((l) => l.userData.knee),
-    sword,
-  ].forEach(batchBone);
-  const trailGeometry = new THREE.BufferGeometry();
-  trailGeometry.setAttribute(
-    "position",
-    new THREE.BufferAttribute(new Float32Array(6 * 6 * 3), 3),
-  );
-  const trail = new THREE.Mesh(
-    trailGeometry,
-    new THREE.MeshBasicMaterial({
-      color: color === "player" ? "#83e5f5" : "#ff9a64",
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.32,
-      depthWrite: false,
-    }),
-  );
-  trail.frustumCulled = false;
-  scene.add(trail);
+  shadow.position.y = 0.012;
+  shadow.scale.set(1.5, 0.6, 1);
   return {
     root,
     body,
+    torso,
+    suit,
     arms,
+    free,
     legs,
-    sword,
-    ring,
-    visor,
-    helm,
-    cloth,
-    bladeMaterial,
-    trail,
-    trailPoints: [],
-    serial: -1,
-    startPose: [0, 0, 0],
+    feet,
+    hand,
+    guard,
+    blade,
+    grip,
+    tip,
   };
 }
-const pVisual = knight("player"),
-  eVisual = knight("enemy");
-let player = fighter(-1.2, 2),
-  enemy = fighter(1.2, -1.4),
+const visuals = [fencerModel("#57c5da"), fencerModel("#ef776d")];
+let state = bout(),
+  mode = "menu",
+  battleMode = "human",
   persona = "warden",
   playerPersona = "raider",
-  battleMode = "human",
-  mode = "intro",
   paused = false,
-  round = 1,
-  pWins = 0,
-  eWins = 0,
-  noticeTimer = 0,
-  clock = 0,
   generation = 0,
-  history = [],
-  particles = [],
-  cameraShake = 0,
-  hitstop = 0,
-  accumulator = 0,
+  clock = 0,
+  accumulator = 0;
+let brains = [createBrain(), createBrain()],
+  controllers = [fencingController(playerPersona), fencingController(persona)],
+  keys = new Set(),
+  noticeUntil = 0,
+  lastEvent = 0,
+  autoUntil = 0,
   soundOn = false,
-  audio;
-let enemyController = controller(persona),
-  playerController = controller(playerPersona);
-let brains = { enemy: createBrain(), player: createBrain() };
-const keys = new Set(),
-  look = new THREE.Vector3(),
-  desiredCamera = new THREE.Vector3();
-function announce(text, duration = 1.2) {
-  $("notice").textContent = text;
-  noticeTimer = duration;
-}
-function tone(freq = 120, type = "triangle", duration = 0.08, volume = 0.06) {
+  audio = null;
+function tone(frequency, duration = 0.06) {
   if (!soundOn) return;
   audio ??= new AudioContext();
-  const osc = audio.createOscillator(),
+  audio.resume();
+  const o = audio.createOscillator(),
     gain = audio.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, audio.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(
-    Math.max(20, freq * 0.35),
-    audio.currentTime + duration,
-  );
-  gain.gain.setValueAtTime(volume, audio.currentTime);
+  o.frequency.value = frequency;
+  gain.gain.setValueAtTime(0.04, audio.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
-  osc.connect(gain);
-  gain.connect(audio.destination);
-  osc.start();
-  osc.stop(audio.currentTime + duration);
+  o.connect(gain).connect(audio.destination);
+  o.start();
+  o.stop(audio.currentTime + duration);
 }
-function burst(f, color) {
-  for (let i = 0; i < 12; i++) {
-    const m = mesh(
-      new THREE.SphereGeometry(0.035, 4, 3),
-      new THREE.MeshBasicMaterial({ color }),
-      f.x,
-      1.4,
-      f.z,
-    );
-    particles.push({
-      mesh: m,
-      v: new THREE.Vector3(
-        (Math.random() - 0.5) * 5,
-        Math.random() * 4,
-        (Math.random() - 0.5) * 5,
-      ),
-      life: 0.5,
-    });
-  }
+function announce(text, duration = 0.6) {
+  $("notice").textContent = text;
+  noticeUntil = clock + duration;
 }
-let manualOverride = null;
-function setGuard(dir) {
-  if (battleMode === "ai") return;
-  manualOverride = dir;
-  switchGuard(player, dir);
-}
-function attack(type) {
-  if (mode !== "play" || paused || battleMode === "ai") return;
-  if (type === "guardbreak" && counterBreak(player, enemy)) {
-    announce("COUNTER BREAK", 0.65);
-    return;
-  }
-  if (!$("manual-directions").checked && type !== "guardbreak") {
-    switchGuard(
-      player,
-      manualOverride ||
-        (type === "heavy" ? "top" : player.attackSerial % 2 ? "right" : "left"),
-    );
-    manualOverride = null;
-  }
-  const accepted = requestAttack(player, type);
-  if (accepted === "rejected" && player.stamina < (specs[type]?.cost || 0)) {
-    announce("RECOVER STAMINA", 0.35);
-    tone(65, "sine", 0.05);
-  }
-  if (accepted !== "rejected") {
-    history.push(`player used ${type} from ${player.attackDir}`);
-    history = history.slice(-8);
-    tone(type === "heavy" ? 100 : 180, "sine", 0.09);
-  }
-}
-function playerDodge() {
-  if (mode !== "play" || paused || battleMode === "ai") return;
-  if (requestDefense(player, "dodge") !== "rejected") {
-    const delta = movementVector();
-    if (delta.length() < 0.1)
-      delta.set(player.x - enemy.x, 0, player.z - enemy.z).normalize();
-    player.dx = delta.x;
-    player.dz = delta.z;
-    tone(180, "sine");
-  }
-}
-function movementVector() {
-  const forward = camera.getWorldDirection(new THREE.Vector3());
-  forward.y = 0;
-  forward.normalize();
-  const right = new THREE.Vector3(-forward.z, 0, forward.x);
-  return forward
-    .multiplyScalar((keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0))
-    .add(
-      right.multiplyScalar((keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0)),
-    )
-    .normalize();
-}
-window.addEventListener("keydown", (e) => {
-  if (["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "Tab"].includes(e.code))
-    e.preventDefault();
-  const k = e.key.toLowerCase();
-  keys.add(k);
-  if (k === "escape" && mode === "play") {
-    paused = !paused;
-    $("paused").classList.toggle("hidden", !paused);
-  }
-  if (e.repeat || paused || battleMode === "ai") return;
-  if (k === "arrowleft" || k === "q") setGuard("left");
-  if (k === "arrowup" || k === "e") setGuard("top");
-  if (k === "arrowright" || k === "r") setGuard("right");
-  if (k === "j") attack("light");
-  if (k === "k") attack("heavy");
-  if (k === "g") attack("guardbreak");
-  if (k === "f" && mode === "play" && feint(player)) {
-    announce("FEINT", 0.5);
-    history.push("player feinted a heavy to bait defensive reactions");
-    history = history.slice(-8);
-  }
-  if (e.code === "Space") playerDodge();
-  if (k === "shift" && mode === "play") {
-    if (!$("manual-directions").checked && specs[enemy.action])
-      switchGuard(player, enemy.attackDir);
-    requestDefense(player, "parry");
-  }
-});
-window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
-window.addEventListener("blur", () => {
+function reset() {
+  generation++;
+  state = bout();
+  brains = [createBrain(), createBrain()];
+  controllers = [fencingController(playerPersona), fencingController(persona)];
+  lastEvent = 0;
   keys.clear();
-  if (mode === "play") {
-    paused = true;
-    $("paused").classList.remove("hidden");
-  }
-});
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-canvas.addEventListener("pointerdown", (e) => {
-  if (e.button === 0) attack("light");
-  else if (e.button === 2) attack("heavy");
-});
-let guardMouseX = 0,
-  guardMouseY = 0;
-window.addEventListener("pointermove", (event) => {
+  paused = false;
+  mode = "play";
+  accumulator = 0;
+  autoUntil = 0;
+  $("intro").classList.add("hidden");
+  $("result").classList.add("hidden");
+  $("paused").classList.add("hidden");
+  for (const id of ["hud", "controls", "readout", "brain"])
+    $(id).classList.remove("hidden");
+  $("brain-player").classList.toggle("hidden", battleMode !== "ai");
+  $("blue-name").textContent =
+    battleMode === "ai" ? names[playerPersona] : "YOU";
+  $("red-name").textContent = names[persona];
+  announce("ALLEZ", 0.65);
+}
+function input(type) {
   if (
     mode !== "play" ||
     paused ||
     battleMode === "ai" ||
-    !$("manual-directions").checked
+    state.phase !== "fence"
   )
     return;
-  guardMouseX += event.movementX;
-  guardMouseY += event.movementY;
-  if (Math.hypot(guardMouseX, guardMouseY) > 28) {
-    if (guardMouseY < -Math.abs(guardMouseX) * 0.8) setGuard("top");
-    else if (Math.abs(guardMouseX) > Math.abs(guardMouseY) * 0.6)
-      setGuard(guardMouseX < 0 ? "left" : "right");
-    guardMouseX = guardMouseY = 0;
+  const f = state.fencers[0],
+    foe = state.fencers[1];
+  if (type === "parry" && ["thrust", "lunge"].includes(foe.action))
+    f.line = foe.attackLine;
+  if (command(f, type)) tone(type === "lunge" ? 170 : 240);
+  else if (f.stamina < (MOVES[type]?.cost || 0))
+    announce("RECOVER YOUR FOOTWORK", 0.3);
+}
+function keydown(e) {
+  const key = e.key.toLowerCase();
+  if ([" ", "arrowleft", "arrowright"].includes(key)) e.preventDefault();
+  if (e.repeat) return;
+  if (!$("instructions").classList.contains("hidden")) {
+    if (key === "escape") $("close-help").click();
+    return;
+  }
+  if (key === "escape" && mode === "play") {
+    paused = !paused;
+    keys.clear();
+    $("paused").classList.toggle("hidden", !paused);
+    return;
+  }
+  if (mode !== "play" || paused) return;
+  keys.add(key);
+  if (battleMode === "ai") return;
+  const f = state.fencers[0];
+  if (key === "j") input("thrust");
+  if (key === "k") input("lunge");
+  if (key === "shift") input("parry");
+  if (key === " ") input("retreat");
+  if (key === "g") input("beat");
+  if (key === "f" && state.phase === "fence" && feint(f))
+    announce("FEINT", 0.25);
+  if (key === "e" && state.phase === "fence" && disengage(f))
+    announce("DISENGAGE", 0.25);
+  if (["1", "2", "3"].includes(key) && f.action === "ready")
+    f.line = ["high", "inside", "outside"][Number(key) - 1];
+}
+window.addEventListener("keydown", keydown);
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => {
+  keys.clear();
+  if (mode === "play" && !paused) {
+    paused = true;
+    $("paused").classList.remove("hidden");
   }
 });
-for (const button of document.querySelectorAll("[data-dir]"))
-  button.onclick = () => setGuard(button.dataset.dir);
-for (const button of document.querySelectorAll("[data-persona]"))
-  button.onclick = () => {
-    persona = button.dataset.persona;
-    for (const b of document.querySelectorAll("[data-persona]"))
-      b.classList.toggle("selected", b === button);
+canvas.addEventListener("pointerdown", (e) => {
+  if (e.button === 0) input("thrust");
+  if (e.button === 2) input("lunge");
+});
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+$("start").onclick = () => {
+  playerPersona = $("player-persona").value;
+  reset();
+};
+$("next").onclick = reset;
+$("menu").onclick = () => {
+  generation++;
+  mode = "menu";
+  keys.clear();
+  $("result").classList.add("hidden");
+  $("intro").classList.remove("hidden");
+  for (const id of ["hud", "controls", "readout", "brain", "brain-player"])
+    $(id).classList.add("hidden");
+};
+for (const b of document.querySelectorAll("[data-persona]"))
+  b.onclick = () => {
+    persona = b.dataset.persona;
+    for (const p of document.querySelectorAll("[data-persona]"))
+      p.classList.toggle("selected", p === b);
   };
-let lowQuality = true,
-  renderBudget = 750000,
-  slowFramesTime = 0;
-function setQuality(low) {
-  lowQuality = low;
-  renderBudget = low ? 750000 : 2000000;
-  renderer.setPixelRatio(low ? 1 : Math.min(devicePixelRatio, 2));
-  renderer.shadowMap.enabled = !low;
-  $("quality").textContent = low ? "QUALITY AUTO" : "QUALITY HIGH";
-  resize();
-}
-$("quality").onclick = () => setQuality(!lowQuality);
-setQuality(new URLSearchParams(location.search).get("quality") !== "high");
-$("sound").onclick = () => {
-  soundOn = !soundOn;
-  $("sound").textContent = soundOn ? "SOUND ON" : "SOUND OFF";
-  tone(300);
-};
-$("insights").onclick = () => {
-  document.body.classList.toggle("show-insights");
-};
+for (const b of document.querySelectorAll("[data-mode]"))
+  b.onclick = () => {
+    battleMode = b.dataset.mode;
+    for (const p of document.querySelectorAll("[data-mode]"))
+      p.classList.toggle("selected", p === b);
+    $("blue-select").classList.toggle("hidden", battleMode !== "ai");
+  };
 $("help").onclick = () => {
+  if (mode === "play") {
+    paused = true;
+    keys.clear();
+    $("paused").classList.add("hidden");
+  }
   $("instructions").classList.remove("hidden");
-  if (mode === "play") paused = true;
 };
 $("close-help").onclick = () => {
   $("instructions").classList.add("hidden");
-  paused = false;
+  if (mode === "play") paused = false;
 };
-function resetRound() {
-  generation++;
-  enemyController = controller(persona);
-  enemyController.cooldown = 0.8;
-  playerController = controller(playerPersona);
-  playerController.cooldown = 0.8;
-  brains = { enemy: createBrain(), player: createBrain() };
-  keys.clear();
-  manualOverride = null;
-  hitstop = 0;
-  accumulator = 0;
-  player = fighter(0, 2);
-  enemy = fighter(0, -1);
-  enemy.windScale =
-    persona === "warden" ? 1.6 : persona === "raider" ? 1.45 : 1.3;
-  mode = "play";
-  paused = false;
-  if (battleMode === "ai")
-    player.windScale =
-      playerPersona === "warden"
-        ? 1.6
-        : playerPersona === "raider"
-          ? 1.45
-          : 1.3;
-  history = [];
-  round = pWins + eWins + 1;
-  $("round").textContent = `ROUND ${round}`;
-  $("score").textContent =
-    `${"● ".repeat(pWins)}${"○ ".repeat(2 - pWins)} / ${"● ".repeat(eWins)}${"○ ".repeat(2 - eWins)}`;
-  $("enemy-name").textContent = `THE ${persona.toUpperCase()}`;
-  for (const id of [
-    "hud",
-    "guard",
-    "brain",
-    "controls",
-    "combat-read",
-    "player-read",
-  ])
-    $(id).classList.remove("hidden");
-  $("intro").classList.add("hidden");
-  $("result").classList.add("hidden");
-  $("player-name").textContent =
-    battleMode === "ai" ? `BLUE · ${playerPersona.toUpperCase()}` : "YOU";
-  $("player-subtitle").textContent = battleMode === "ai" ? "JEV" : "THE EXILE";
-  $("enemy-brain-caption").textContent =
-    battleMode === "ai" ? "RED FIGHTER · JEV" : "THE OPPONENT'S MIND";
-  $("enemy-name").textContent =
-    battleMode === "ai"
-      ? `RED · ${persona.toUpperCase()}`
-      : `THE ${persona.toUpperCase()}`;
-  $("guard").classList.toggle(
-    "hidden",
-    battleMode === "ai" || !$("manual-directions").checked,
+$("insights").onclick = () => document.body.classList.toggle("show-insights");
+$("sound").onclick = () => {
+  soundOn = !soundOn;
+  $("sound").textContent = soundOn ? "SOUND ON" : "SOUND OFF";
+};
+async function think(side) {
+  const token = generation,
+    brain = brains[side],
+    f = state.fencers[side],
+    foe = state.fencers[1 - side];
+  const history = state.events
+    .slice(-6)
+    .map((e) => `${e.side === side ? "self" : "opponent"}: ${e.type}`);
+  const status = await requestDecision(
+    brain,
+    fencingState(f, foe, side === 0 ? playerPersona : persona, history),
+    {
+      apiBase,
+      now: () => clock,
+      isCurrent: () => token === generation && mode === "play",
+    },
   );
-  $("controls").classList.toggle("hidden", battleMode === "ai");
-  $("brain-player").classList.toggle("hidden", battleMode !== "ai");
-  $("spectator-hint").classList.toggle("hidden", battleMode !== "ai");
-  $("spectator-hint").textContent = "JEV vs JEV · ESC TO PAUSE";
-  $("brain-status").textContent = localOnly ? "LOCAL" : "CONNECTING";
-  $("intent").textContent = "Reading the arena";
-  $("probabilities").replaceChildren();
-  $("latency").textContent = "Waiting for JEV";
-  $("player-brain-status").textContent = "CONNECTING";
-  $("player-intent").textContent = "Reading the arena";
-  $("player-probabilities").replaceChildren();
-  $("player-latency").textContent = "Waiting for JEV";
-  announce(battleMode === "ai" ? "JEV vs JEV" : "FIGHT", 0.8);
-}
-for (const button of document.querySelectorAll("[data-mode]"))
-  button.onclick = () => {
-    battleMode = button.dataset.mode;
-    document
-      .querySelectorAll("[data-mode]")
-      .forEach((b) => b.classList.toggle("selected", b === button));
-    $("blue-select").classList.toggle("hidden", battleMode !== "ai");
-    $("start").innerHTML =
-      battleMode === "ai"
-        ? "WATCH DUEL <span>↗</span>"
-        : "ENTER THE RING <span>↗</span>";
-  };
-$("player-persona").onchange = () => {
-  playerPersona = $("player-persona").value;
-};
-$("start").onclick = () => {
-  pWins = eWins = 0;
-  resetRound();
-};
-$("next").onclick = () => {
-  if (pWins === 2 || eWins === 2) pWins = eWins = 0;
-  resetRound();
-};
-$("menu").onclick = () => {
-  mode = "intro";
-  generation++;
-  $("brain-player").classList.add("hidden");
-  $("spectator-hint").classList.add("hidden");
-  $("result").classList.add("hidden");
-  $("intro").classList.remove("hidden");
-  for (const id of [
-    "hud",
-    "guard",
-    "brain",
-    "controls",
-    "combat-read",
-    "player-read",
-  ])
-    $(id).classList.add("hidden");
-};
-function finish() {
-  mode = "result";
-  const won = enemy.hp <= 0 && player.hp > 0;
-  if (won) pWins++;
-  else eWins++;
-  const match = pWins === 2 || eWins === 2;
-  $("result-label").textContent = match
-    ? "DUEL COMPLETE"
-    : `ROUND ${round} COMPLETE`;
-  $("result-title").textContent =
-    battleMode === "ai"
-      ? `${won ? "BLUE" : "RED"} WINS`
-      : won
-        ? "VICTORY"
-        : "DEFEATED";
-  $("result-detail").textContent =
-    battleMode === "ai"
-      ? `${playerPersona.toUpperCase()} ${pWins} — ${eWins} ${persona.toUpperCase()}`
-      : match
-        ? won
-          ? "You held your vow. The ring is yours."
-          : "The ring remembers. Return with sharper intent."
-        : `${pWins} — ${eWins} · First to two victories`;
-  $("next").textContent = match ? "DUEL AGAIN ↗" : "NEXT ROUND ↗";
-  $("result").classList.remove("hidden");
-  if (battleMode === "ai" && $("auto-rounds").checked) {
-    const finishedGeneration = generation;
-    setTimeout(() => {
-      if (
-        generation === finishedGeneration &&
-        mode === "result" &&
-        battleMode === "ai" &&
-        $("auto-rounds").checked
-      ) {
-        if (match) pWins = eWins = 0;
-        resetRound();
-      }
-    }, 2500);
-  }
-}
-function textIfChanged(id, text) {
-  if ($(id).textContent !== text) $(id).textContent = text;
-}
-function updateConnection() {
-  if (battleMode === "ai") {
-    const blue = !!liveDecision(brains.player, clock),
-      red = !!liveDecision(brains.enemy, clock);
-    textIfChanged(
-      "connection",
-      blue && red ? "JEV vs JEV · LIVE" : "JEV vs JEV · WAITING",
-    );
-    $("connection").classList.toggle("offline", !blue || !red);
-    textIfChanged(
-      "spectator-hint",
-      blue && red
-        ? "JEV vs JEV · ESC TO PAUSE"
-        : "WAITING FOR BOTH JEV BRAINS · RETRYING",
-    );
-  } else {
-    const live = brains.enemy.failures === 0 && brains.enemy.decision;
-    textIfChanged("connection", live ? "JEV · LIVE" : "JEV · OFFLINE");
-    $("connection").classList.toggle("offline", !live);
-  }
-}
-async function think(side = "enemy") {
-  if (localOnly || mode !== "play" || paused) return;
-  const brain = brains[side],
-    token = generation;
-  const state =
-    side === "enemy"
-      ? duelState(enemy, player, persona, history)
-      : duelState(player, enemy, playerPersona, history);
-  const status = await requestDecision(brain, state, {
-    apiBase,
-    now: () => clock,
-    isCurrent: () => token === generation && mode === "play",
-  });
   if (status === "stale" || status === "busy") return;
-  const prefix = side === "player" ? "player-" : "";
-  $(prefix + "brain-status").textContent =
-    status === "live" ? "LIVE" : battleMode === "ai" ? "WAITING" : "LOCAL";
+  const prefix = side === 0 ? "player-" : "";
+  const d = brain.decision;
   if (status === "live") {
-    const result = brain.decision;
+    const terms = {
+      light: "THRUST",
+      heavy: "LUNGE",
+      guardbreak: "BLADE BEAT",
+      dodge: "RETREAT",
+      feint: "FEINT",
+      defend: "DRAW THE ATTACK",
+    };
     $(prefix + "intent").textContent =
-      `${result.tactic} · ${result.attack_direction} · ${result.movement.replaceAll("_", " ")}`;
+      `${terms[d.tactic] || d.tactic} · ${d.movement.replaceAll("_", " ")}`;
     $(prefix + "latency").textContent =
-      `${result.latency} ms · ${result.model} · ${brain.liveCount} decisions`;
-    $(prefix + "probabilities").replaceChildren();
-    for (const [key, p] of Object.entries(result.probabilities.tactic)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)) {
-      const row = document.createElement("div");
-      row.className = "prob";
-      const name = document.createElement("span");
-      name.textContent = key.toUpperCase();
-      const bar = document.createElement("div"),
-        fill = document.createElement("i");
-      fill.style.width = `${p * 100}%`;
-      bar.append(fill);
-      const num = document.createElement("b");
-      num.textContent = `${Math.round(p * 100)}%`;
-      row.append(name, bar, num);
-      $(prefix + "probabilities").append(row);
-    }
+      `${d.latency} ms · ${d.model} · ${brain.liveCount} decisions`;
   } else
     $(prefix + "latency").textContent =
       battleMode === "ai"
-        ? "JEV unavailable · waiting and retrying"
-        : "Local sparring fallback · retrying JEV";
-  updateConnection();
+        ? "Waiting for JEV · retrying"
+        : "Local sparring · retrying JEV";
 }
-let localPlan = null,
-  localPlanAt = -10;
-function localDecision() {
-  if (localPlan && clock - localPlanAt < 0.35) return localPlan;
-  localPlanAt = clock;
-  return (localPlan = {
-    tactic:
-      player.action !== "idle"
-        ? "defend"
-        : Math.random() < 0.7
-          ? "light"
-          : "heavy",
-    attack_direction: directions[Math.floor(Math.random() * 3)],
-    guard_direction: directions[Math.floor(Math.random() * 3)],
-    on_light: Math.random() < 0.55 ? "block" : "interrupt",
-    on_heavy: persona === "raider" ? "interrupt" : "parry",
-    on_guardbreak: "counter",
-    movement:
-      Math.hypot(player.x - enemy.x, player.z - enemy.z) > 2.5
-        ? "advance"
-        : "hold",
-    source: "local",
-  });
-}
-function ai(dt) {
-  if (battleMode === "ai") {
-    const blue = liveDecision(brains.player, clock),
-      red = liveDecision(brains.enemy, clock);
-    if (!blue || !red) {
-      player.moving = enemy.moving = false;
-      return;
-    }
-    stepAI(playerController, player, enemy, blue, dt);
-    stepAI(enemyController, enemy, player, red, dt);
-  } else {
-    const brain = brains.enemy;
-    const d =
-      brain.decision && clock - brain.decisionAt < 5
-        ? brain.decision
-        : localDecision();
-    stepAI(enemyController, enemy, player, d, dt);
-  }
-}
-function impact(a, b, strike, outcome) {
-  if (battleMode === "ai") {
-    history.push(
-      `${a === player ? "blue" : "red"} used ${strike.type} from ${strike.dir}: ${outcome}`,
+const fallback = {
+  tactic: "light",
+  movement: "advance",
+  attack_direction: "left",
+  on_light: "parry",
+  on_heavy: "dodge",
+  source: "local",
+};
+function simulate(dt) {
+  let movements = [0, 0];
+  const red = liveDecision(brains[1], clock),
+    blue = liveDecision(brains[0], clock);
+  if (battleMode === "ai" && (!red || !blue)) return;
+  if (state.phase === "fence") {
+    movements[1] = stepFencingAI(
+      controllers[1],
+      state.fencers[1],
+      state.fencers[0],
+      red || fallback,
+      dt,
     );
-    history = history.slice(-8);
-  }
-  if (["hit", "block", "parry", "break", "counter"].includes(outcome))
-    hitstop = outcome === "parry" ? 0.025 : outcome === "hit" ? 0.012 : 0;
-  if (outcome === "hit" || outcome === "break") {
-    burst(b, "#e9a16e");
-    cameraShake = 0.065;
-    tone(75, "sawtooth", 0.16, 0.1);
-    announce(
-      outcome === "break"
-        ? "GUARD BROKEN"
-        : battleMode === "ai"
-          ? `${a === player ? "BLUE" : "RED"} HIT`
-          : a === player
-            ? "STRIKE"
-            : "WOUNDED",
-      0.25,
-    );
-  } else if (outcome === "block" || outcome === "parry") {
-    burst(b, "#d3e8ed");
-    tone(outcome === "parry" ? 850 : 570, "triangle", 0.18, 0.08);
-    announce(outcome === "parry" ? "PARRY · COUNTER NOW" : "BLOCK", 0.25);
-  } else if (outcome === "counter") {
-    tone(400);
-    announce("COUNTER BREAK", 0.6);
-  } else if (outcome === "evade") announce("EVADED", 0.35);
-  else if (outcome === "miss" && (a === player || battleMode === "ai"))
-    announce(
+    movements[0] =
       battleMode === "ai"
-        ? `${a === player ? "BLUE" : "RED"} MISSED`
-        : "MISSED · CLOSE THE GAP",
-      0.3,
-    );
-}
-function animateKnight(v, f, other, dt) {
-  v.cloth.emissive.setRGB(f.hitFlash * 3, f.hitFlash * 2, f.hitFlash);
-  v.root.position.set(f.x, 0, f.z);
-  v.root.rotation.y = yawToTarget(f, other);
-  const moving = f.moving || f.dodge > 0;
-  const travelled = Math.hypot(
-    f.x - (v.previousX ?? f.x),
-    f.z - (v.previousZ ?? f.z),
-  );
-  v.previousX = f.x;
-  v.previousZ = f.z;
-  v.gait = (v.gait || 0) + travelled * 7;
-  const stride = moving ? Math.sin(v.gait) * 0.35 : 0;
-  v.legs[0].rotation.x = stride;
-  v.legs[1].rotation.x = -stride;
-  v.legs[0].userData.knee.rotation.x = Math.max(0, stride) * 1.2 + 0.12;
-  v.legs[1].userData.knee.rotation.x = Math.max(0, -stride) * 1.2 + 0.12;
-
-  v.body.position.y = moving ? Math.abs(stride) * 0.045 : 0;
-  v.body.rotation.x = THREE.MathUtils.damp(
-    v.body.rotation.x,
-    f.stun > 0 ? -0.35 : f.dodge > 0 ? 0.45 : specs[f.action] ? 0.08 : 0,
-    25,
-    dt,
-  );
-  let pose = swordPose(f);
-
-  if (v.serial !== f.attackSerial) {
-    v.serial = f.attackSerial;
-    v.startPose = [
-      v.arms[1].rotation.x,
-      v.arms[1].rotation.z,
-      v.arms[1].rotation.y,
-      v.arms[1].userData.elbow.rotation.x,
-      v.arms[1].userData.wrist.rotation.x,
+        ? stepFencingAI(
+            controllers[0],
+            state.fencers[0],
+            state.fencers[1],
+            blue,
+            dt,
+          )
+        : (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
+          (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+  }
+  const previousExchange = state.exchange;
+  step(state, dt, movements);
+  if (state.exchange !== previousExchange)
+    controllers = [
+      fencingController(playerPersona),
+      fencingController(persona),
     ];
-    v.trailPoints.length = 0;
+  for (const e of state.events) {
+    if (e.time <= lastEvent) continue;
+    const who =
+      battleMode === "ai"
+        ? e.side === 0
+          ? "BLUE"
+          : "RED"
+        : e.side === 0
+          ? "YOU"
+          : "OPPONENT";
+    if (e.type === "touch") {
+      announce(`${who} · TOUCH`, 0.7);
+      tone(e.side === 0 ? 1000 : 700, 0.15);
+    }
+    if (e.type === "double") announce("DOUBLE TOUCH", 1);
+    if (e.type === "parry") {
+      announce(`${who} · PARRY — RIPOSTE`, 0.35);
+      tone(1300);
+    }
+    if (e.type === "beat") {
+      announce("BLADE BEAT", 0.3);
+      tone(500);
+    }
+    if (e.type === "miss" && e.side === 0) announce("SHORT · RECOVER", 0.3);
   }
-  // Blend only the first 45 ms into a new swing, then follow its actual timeline.
-  const entry = specs[f.action] ? Math.min(1, f.elapsed / 0.045) : 1;
-  const target = pose.map((value, i) =>
-    specs[f.action]
-      ? THREE.MathUtils.lerp(v.startPose[i], value, entry)
-      : value,
-  );
-  const blend =
-    specs[f.action] || f.action === "recover" ? 1 : 1 - Math.exp(-dt * 30);
-  // Shoulder rotation follows the shortest arc; elbows bend forward in one plane.
-  const shoulderTarget = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(target[0], target[2], target[1]),
-  );
-  v.arms[1].quaternion.slerp(shoulderTarget, blend);
-  v.arms[1].userData.elbow.rotation.x = THREE.MathUtils.lerp(
-    v.arms[1].userData.elbow.rotation.x,
-    target[3],
-    blend,
-  );
-  v.arms[1].userData.wrist.rotation.x = THREE.MathUtils.lerp(
-    v.arms[1].userData.wrist.rotation.x,
-    target[4],
-    blend,
-  );
-  const cut = specs[f.action] && f.elapsed > f.wind - 0.085;
-  v.bladeMaterial.emissive.set(
-    cut ? (v === pVisual ? "#3baabf" : "#ea673d") : "#000000",
-  );
-  v.body.rotation.y =
-    specs[f.action] && f.action !== "guardbreak"
-      ? (f.attackDir === "left" ? -1 : f.attackDir === "right" ? 1 : 0) *
-        (0.16 - 0.32 * Math.min(1, f.elapsed / f.wind))
-      : THREE.MathUtils.damp(v.body.rotation.y, 0, 30, dt);
-  const grabExtension =
-    f.action === "guardbreak"
-      ? Math.sin((Math.min(1, f.elapsed / f.wind) * Math.PI) / 2)
-      : 0;
-  const defending =
-    f.action === "parry" || f.blockFlash > 0 || f.parryFlash > 0;
-  v.arms[0].rotation.x = THREE.MathUtils.damp(
-    v.arms[0].rotation.x,
-    defending ? -0.65 : -0.35 - grabExtension * 0.95 + stride * 0.3,
-    30,
-    dt,
-  );
-  v.arms[0].rotation.z = THREE.MathUtils.damp(
-    v.arms[0].rotation.z,
-    defending ? -0.3 : -0.2,
-    30,
-    dt,
-  );
-  v.arms[0].userData.elbow.rotation.x = THREE.MathUtils.damp(
-    v.arms[0].userData.elbow.rotation.x,
-    -1.05 + grabExtension * 0.8,
-    30,
-    dt,
-  );
-  v.root.updateMatrixWorld(true);
-  if (cut || (f.action === "recover" && f.elapsed < 0.07 && !f.feinted)) {
-    v.trailPoints.unshift([
-      v.sword.localToWorld(new THREE.Vector3(0, 0.3, 0)),
-      v.sword.localToWorld(new THREE.Vector3(0, 1.48, 0)),
-    ]);
-    v.trailPoints.length = Math.min(v.trailPoints.length, 7);
-  } else v.trailPoints.length = 0;
-  const points = v.trailPoints,
-    positions = v.trail.geometry.attributes.position;
-  let count = 0;
-  for (let i = 0; i < points.length - 1; i++) {
-    for (const point of [
-      points[i][0],
-      points[i][1],
-      points[i + 1][1],
-      points[i][0],
-      points[i + 1][1],
-      points[i + 1][0],
-    ])
-      positions.setXYZ(count++, point.x, point.y, point.z);
+  lastEvent = state.time;
+  if (state.phase === "finished" && mode === "play") {
+    mode = "result";
+    keys.clear();
+    $("result").classList.remove("hidden");
+    $("result-title").textContent =
+      battleMode === "ai"
+        ? `${state.winner === 0 ? "BLUE" : "RED"} WINS`
+        : state.winner === 0
+          ? "YOUR BOUT."
+          : "REMATCH?";
+    $("result-detail").textContent =
+      `${state.score[0]} — ${state.score[1]} · ${state.exchange} exchanges`;
+    autoUntil = clock + 3;
   }
-  positions.needsUpdate = true;
-  v.trail.geometry.setDrawRange(0, count);
-  v.trail.visible = count > 0;
-  v.root.rotation.z = 0;
-  if (f.hp <= 0) {
-    v.body.rotation.z = THREE.MathUtils.damp(v.body.rotation.z, 1.3, 4, dt);
-    v.body.position.y = -0.4;
-  } else v.body.rotation.z = THREE.MathUtils.damp(v.body.rotation.z, 0, 8, dt);
+}
+function animate(v, f, dt) {
+  const g = geometry(f),
+    ext = g.extension;
+  v.root.position.set(f.x, 0, 0);
+  v.root.rotation.y = f.side === 1 ? 0 : Math.PI;
+  v.body.position.x = g.lunge * 0.18;
+  v.body.position.y = 0;
+  v.suit.emissive.setRGB(f.flash * 0.5, f.flash * 0.6, f.flash * 0.8);
+  const shoulder = point(0.18, 1.45, 0.09),
+    hand = point(g.hand.x - g.lunge * 0.18, g.hand.y, 0.09);
+  const joint = elbow(shoulder, hand);
+  placeSegment(v.arms[0], shoulder, joint);
+  placeSegment(v.arms[1], joint, hand);
+  v.hand.position.copy(hand);
+  const tip = point(g.localTip.x - g.lunge * 0.18, g.localTip.y, 0.09);
+  const direction = tip.clone().sub(hand).normalize();
+  v.guard.position.copy(hand).addScaledVector(direction, 0.075);
+  v.guard.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction);
+  v.tip.position.copy(tip);
+  placeSegment(v.blade, hand.clone().addScaledVector(direction, 0.09), tip);
+  placeSegment(v.grip, hand.clone().addScaledVector(direction, -0.1), hand);
+  const freeShoulder = point(-0.08, 1.46, -0.12),
+    freeElbow = point(-0.35, 1.61, -0.16),
+    freeHand = point(-0.5 - ext * 0.12, 1.8, -0.12);
+  placeSegment(v.free[0], freeShoulder, freeElbow);
+  placeSegment(v.free[1], freeElbow, freeHand);
+  const walk =
+    f.moving && f.action !== "lunge" ? Math.sin(f.travel * 9) * 0.16 : 0;
+  const hip = point(-0.04 + g.lunge * 0.12, 0.91, 0);
+  const front = point(0.35 + g.lunge * 0.34 + walk, 0.08, 0.13),
+    back = point(-0.35 - walk, 0.08, -0.13);
+  const frontKnee = point(0.26 + g.lunge * 0.18, 0.48, 0.13),
+    backKnee = point(-0.24, 0.48, -0.13);
+  placeSegment(v.legs[0], hip.clone().add(point(0, 0, 0.12)), frontKnee);
+  placeSegment(v.legs[1], frontKnee, front);
+  placeSegment(v.legs[2], hip.clone().add(point(0, 0, -0.12)), backKnee);
+  placeSegment(v.legs[3], backKnee, back);
+  v.feet[0].position.copy(front);
+  v.feet[1].position.copy(back);
+  v.feet[1].rotation.y = Math.PI / 2;
 }
 function resize() {
-  const budget = renderBudget;
-  renderer.setPixelRatio(
-    Math.min(
-      lowQuality ? 1 : devicePixelRatio,
-      Math.sqrt(budget / (innerWidth * innerHeight)),
-    ),
-  );
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 }
-addEventListener("resize", resize);
+window.addEventListener("resize", resize);
 resize();
-function simulate(dt) {
-  if (hitstop > 0) {
-    hitstop = Math.max(0, hitstop - dt);
-    return;
-  }
-  stepDuel(player, enemy, dt, {
-    move: battleMode === "ai" ? { x: 0, z: 0 } : movementVector(),
-    enemyStep: ai,
-    onImpact: impact,
-  });
-  if (player.hp <= 0 || enemy.hp <= 0) finish();
+function hud() {
+  const [a, b] = state.fencers;
+  $("blue-score").textContent = state.score[0];
+  $("red-score").textContent = state.score[1];
+  $("blue-energy").style.width = `${a.stamina}%`;
+  $("red-energy").style.width = `${b.stamina}%`;
+  for (let i = 0; i < 2; i++)
+    $(i === 0 ? "blue-light" : "red-light").classList.toggle(
+      "lit",
+      state.lights[i],
+    );
+  $("phase").textContent =
+    state.phase === "fence"
+      ? "ALLEZ"
+      : state.phase === "halt"
+        ? "HALT"
+        : "BOUT COMPLETE";
+  const gap = Math.abs(a.x - b.x);
+  $("distance").textContent =
+    gap > 3.1
+      ? "OUTSIDE LUNGE DISTANCE"
+      : gap > 2
+        ? "LUNGE DISTANCE"
+        : "THRUST DISTANCE";
+  $("readout").textContent =
+    battleMode === "ai"
+      ? "JEV vs JEV · ESC TO PAUSE"
+      : a.riposte > 0
+        ? "RIPOSTE · THRUST NOW"
+        : a.bladeLost > 0
+          ? "BLADE DISPLACED · RECOVER"
+          : ["thrust", "lunge"].includes(b.action)
+            ? `${b.action.toUpperCase()} · ${b.attackLine.toUpperCase()} · SHIFT TO PARRY`
+            : `${a.line.toUpperCase()} LINE · ${a.action === "ready" ? "EN GARDE" : a.action.toUpperCase()}`;
+  const fresh = liveDecision(brains[1], clock),
+    both = fresh && liveDecision(brains[0], clock);
+  $("connection").textContent =
+    battleMode === "ai"
+      ? both
+        ? "JEV vs JEV · LIVE"
+        : "JEV vs JEV · WAITING"
+      : fresh
+        ? "JEV · LIVE"
+        : brains[1].failures || localOnly
+          ? "LOCAL SPARRING · RETRYING JEV"
+          : "JEV · CONNECTING";
 }
-let frameTime = 1 / 60;
-let prev = performance.now();
+let previous = performance.now(),
+  fps = 60;
 function frame(now) {
-  const rawDt = (now - prev) / 1000;
-  frameTime = frameTime * 0.9 + rawDt * 0.1;
-  if (lowQuality && !document.hidden && frameTime > 0.033) {
-    slowFramesTime += Math.min(rawDt, 0.1);
-    if (slowFramesTime > 1 && renderBudget > 250000) {
-      renderBudget = Math.max(250000, renderBudget * 0.7);
-      resize();
-      slowFramesTime = 0;
-    }
-  } else slowFramesTime = 0;
-  const dt = Math.min(0.25, rawDt);
-  prev = now;
+  const raw = (now - previous) / 1000,
+    dt = Math.min(0.1, raw);
+  previous = now;
   clock += dt;
+  fps = fps * 0.95 + (1 / Math.max(raw, 0.001)) * 0.05;
   if (mode === "play" && !paused) {
     accumulator += dt;
-    while (accumulator >= 1 / 120 && mode === "play") {
-      accumulator -= 1 / 120;
+    while (accumulator >= 1 / 120) {
       simulate(1 / 120);
+      accumulator -= 1 / 120;
+      if (mode !== "play") break;
     }
-    const interval = battleMode === "ai" ? 1.1 : 0.65;
-    if (
-      !localOnly &&
-      clock - brains.enemy.lastBrain > (brains.enemy.failures ? 3 : interval)
-    )
-      think("enemy");
-    if (battleMode === "ai") {
+    if (!localOnly) {
+      if (clock - brains[1].lastBrain > (brains[1].failures ? 3 : 0.75))
+        think(1);
       if (
-        !localOnly &&
-        clock - brains.player.lastBrain >
-          (brains.player.failures ? 3 : interval) &&
-        clock - brains.enemy.lastBrain > 0.3
+        battleMode === "ai" &&
+        clock - brains[0].lastBrain > (brains[0].failures ? 3 : 1.05) &&
+        clock - brains[1].lastBrain > 0.25
       )
-        think("player");
-      updateConnection();
+        think(0);
     }
-  } else accumulator = 0;
-  if (!paused) {
-    animateKnight(pVisual, player, enemy, dt);
-    animateKnight(eVisual, enemy, player, dt);
   }
-  if (mode === "intro") {
-    desiredCamera.set(8, 5, 7);
-    look.set(-0.5, 1, 0);
-  } else {
-    const distance = Math.hypot(player.x - enemy.x, player.z - enemy.z);
-    const zoom = Math.max(1, Math.min(1.65, distance / 5));
-    desiredCamera.set(
-      (player.x + enemy.x) / 2 + 8 * zoom,
-      5.8 * zoom,
-      (player.z + enemy.z) / 2 + 4.2 * zoom,
+  if (
+    mode === "result" &&
+    battleMode === "ai" &&
+    $("auto-rounds").checked &&
+    clock >= autoUntil
+  )
+    reset();
+  if (clock > noticeUntil) $("notice").textContent = "";
+  hud();
+  for (let i = 0; i < 2; i++) animate(visuals[i], state.fencers[i], dt);
+  const middle = (state.fencers[0].x + state.fencers[1].x) / 2,
+    gap = Math.abs(state.fencers[1].x - state.fencers[0].x),
+    distance = Math.max(
+      8.8,
+      gap * 1.15 + 4.5,
+      (gap + 2.8) /
+        (2 * Math.tan(THREE.MathUtils.degToRad(20)) * camera.aspect),
     );
-    look.set((player.x + enemy.x) / 2, 1, (player.z + enemy.z) / 2);
-  }
-  camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 7));
-  if (cameraShake > 0) {
-    cameraShake -= dt;
-    camera.position.x += (Math.random() - 0.5) * cameraShake;
-  }
-  camera.lookAt(look);
-  for (const [id, value] of [
-    ["p-health", player.hp],
-    ["p-stamina", player.stamina],
-    ["e-health", enemy.hp],
-    ["e-stamina", enemy.stamina],
-  ])
-    $(id).style.width = `${value}%`;
-  for (const b of document.querySelectorAll("[data-dir]")) {
-    b.classList.toggle("active", b.dataset.dir === player.guard);
-    b.classList.toggle(
-      "threat",
-      !!specs[enemy.action] && enemy.attackDir === b.dataset.dir,
-    );
-  }
-  const incoming = specs[enemy.action];
-  const enemyScreen = new THREE.Vector3(enemy.x, 2.55, enemy.z).project(camera);
-  const enemyX = (enemyScreen.x * 0.5 + 0.5) * innerWidth,
-    enemyY = (-enemyScreen.y * 0.5 + 0.5) * innerHeight;
-  $("combat-read").style.left =
-    `${Math.max(130, Math.min(innerWidth - 130, enemyX))}px`;
-  $("combat-read").style.top = `${Math.max(170, enemyY - 112)}px`;
-  $("enemy-guard").textContent =
-    `GUARD ${enemy.guard === "left" ? "◀" : enemy.guard === "right" ? "▶" : "▲"}`;
-  $("enemy-guard").classList.toggle(
-    "opening",
-    enemy.stun > 0 || enemy.action === "recover",
-  );
-  $("enemy-guard").textContent =
-    enemy.stun > 0
-      ? "OPEN · COUNTERATTACK"
-      : enemy.action === "recover"
-        ? "OPEN · RECOVERING"
-        : $("enemy-guard").textContent;
-  $("attack-arrow").textContent = incoming
-    ? enemy.action === "guardbreak"
-      ? "✊"
-      : enemy.attackDir === "left"
-        ? "◀"
-        : enemy.attackDir === "right"
-          ? "▶"
-          : "▲"
-    : "";
-  $("combat-read").classList.toggle(
-    "matched",
-    !!incoming && enemy.attackDir === player.guard,
-  );
-  $("guard-label").textContent = `YOUR GUARD · ${player.guard.toUpperCase()}`;
-
-  $("combat-read").classList.toggle("inactive", !incoming);
-  $("attack-read").textContent = incoming
-    ? enemy.action === "guardbreak"
-      ? battleMode === "ai"
-        ? "RED GRAB"
-        : "GRAB · G TO COUNTER"
-      : `${enemy.action.toUpperCase()} · ${enemy.attackDir.toUpperCase()}`
-    : "";
-  $("attack-progress").style.width = incoming
-    ? `${Math.min(100, (enemy.elapsed / enemy.wind) * 100)}%`
-    : "0%";
-  $("player-read").textContent =
-    battleMode === "ai"
-      ? `BLUE · ${player.action.toUpperCase()} · ${player.guard.toUpperCase()}`
-      : player.grabbed > 0
-        ? "G · COUNTER NOW"
-        : player.exhausted
-          ? "EXHAUSTED · RECOVER"
-          : player.buffer
-            ? "FOLLOW-UP BUFFERED"
-            : player.action === "parry"
-              ? "PARRY"
-              : player.chain > 1
-                ? `CHAIN ${player.chain}/4`
-                : player.stamina < 20
-                  ? "LOW STAMINA"
-                  : Math.hypot(player.x - enemy.x, player.z - enemy.z) >
-                      specs.light.reach
-                    ? "CLOSE THE GAP"
-                    : "IN RANGE";
-  if (noticeTimer > 0) {
-    noticeTimer -= dt;
-    if (noticeTimer <= 0) $("notice").textContent = "";
-  }
-  particles = particles.filter((p) => {
-    p.life -= dt;
-    p.mesh.position.addScaledVector(p.v, dt);
-    p.v.y -= dt * 8;
-    p.mesh.scale.setScalar(Math.max(0, p.life * 2));
-    if (p.life <= 0) {
-      scene.remove(p.mesh);
-      p.mesh.geometry.dispose();
-      p.mesh.material.dispose();
-      return false;
-    }
-    return true;
-  });
+  camera.position.x = THREE.MathUtils.damp(camera.position.x, middle, 5, dt);
+  camera.position.z = THREE.MathUtils.damp(camera.position.z, distance, 5, dt);
+  camera.lookAt(middle, 0.95, 0);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-if (localOnly) showLocalMode();
-else
-  fetch(`${apiBase}/api/health`)
-    .then((r) => r.json())
-    .then((s) => {
-      $("connection").textContent = s.keyConfigured
-        ? "JEV · READY"
-        : "JEV · KEY MISSING";
-      $("connection").classList.toggle("offline", !s.keyConfigured);
-    })
-    .catch(() => {
-      $("connection").textContent = "JEV · OFFLINE";
-    });
-// Read-only diagnostics for automated gameplay verification.
-function visualFacing(v, f, other) {
-  v.root.updateMatrixWorld(true);
-  const front = v.visor
-    .getWorldPosition(new THREE.Vector3())
-    .sub(v.helm.getWorldPosition(new THREE.Vector3()));
-  front.y = 0;
-  front.normalize();
-  const target = new THREE.Vector3(other.x - f.x, 0, other.z - f.z).normalize();
-  return {
-    dot: front.dot(target),
-    front: { x: front.x, z: front.z },
-    target: { x: target.x, z: target.z },
-  };
 }
 window.__IRON_VOW__ = {
   getState: () => ({
     mode,
-    paused,
-    round,
-    pWins,
-    eWins,
-    player: { ...player },
-    enemy: { ...enemy },
     battleMode,
-    playerPersona,
+    paused,
     persona,
-    liveCount: brains.enemy.liveCount,
-    decision: brains.enemy.decision,
-    failures: brains.enemy.failures,
-    brains: { player: { ...brains.player }, enemy: { ...brains.enemy } },
-    ai: {
-      reactions: enemyController.reactions,
-      lastReaction: enemyController.lastReaction,
-      decisionUsed: enemyController.decisionUsed,
-    },
-    cameraForward: (() => {
-      const f = camera.getWorldDirection(new THREE.Vector3());
-      return { x: f.x, z: f.z };
-    })(),
-    facing: {
-      player: visualFacing(pVisual, player, enemy),
-      enemy: visualFacing(eVisual, enemy, player),
-    },
-    renderedFrames: renderer.info.render.frame,
-    fps: Math.round(1 / frameTime),
-    drawCalls: renderer.info.render.calls,
+    playerPersona,
+    fps,
+    phase: state.phase,
+    score: [...state.score],
+    winner: state.winner,
+    exchange: state.exchange,
+    player: { ...state.fencers[0] },
+    enemy: { ...state.fencers[1] },
+    lights: [...state.lights],
+    events: state.events.map((e) => ({ ...e })),
+    brains: { player: { ...brains[0] }, enemy: { ...brains[1] } },
+    rig: visuals.map((v) => ({
+      hand: v.hand.getWorldPosition(new THREE.Vector3()).toArray(),
+      tip: v.tip.getWorldPosition(new THREE.Vector3()).toArray(),
+    })),
   }),
 };
+requestAnimationFrame(frame);

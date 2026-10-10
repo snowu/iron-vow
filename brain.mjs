@@ -95,6 +95,109 @@ export const questions = {
     },
   },
 };
+// Preserve typed choice keys for existing clients; the fencing client maps them
+// to thrust/lunge/beat/retreat. No melee tactic reaches the fencing simulation.
+export const fencingQuestions = {
+  tactic: {
+    type: "choice",
+    instructions:
+      "Choose an épée fencer's proactive intention on a narrow piste. Score a single point with a thrust. A lunge closes about one metre but commits recovery. Draw and punish misses; no passive block, slashes, grabs, damage or right-of-way. Both can score near-simultaneously.",
+    criteria: {
+      light: "Quick straight thrust at close distance",
+      heavy: "Committed long lunge",
+      guardbreak: "Beat the blade at close range before attacking",
+      feint: "False lunge preparation to draw a parry, then cancel",
+      defend: "Draw an attack and prepare a parry-riposte",
+      dodge: "Fast retreat to make the point fall short",
+    },
+  },
+  attack_direction: {
+    type: "choice",
+    instructions:
+      "Choose an épée blade line. Vary predictable lines to evade matching parries.",
+    criteria: {
+      top: "High line toward mask",
+      left: "Inside line toward torso",
+      right: "Outside line toward torso",
+    },
+  },
+  guard_direction: {
+    type: "choice",
+    instructions:
+      "Choose anticipated parry line; simply holding it does not block. A timed parry must match the observed blade line.",
+    criteria: {
+      top: "High parry",
+      left: "Inside parry",
+      right: "Outside parry",
+    },
+  },
+  movement: {
+    type: "choice",
+    instructions:
+      "Choose fencing footwork on a straight piste, no circling. Thrust reach about two metres; lunge reaches about three. Retreat when exhausted or baiting; advance when too far to attack.",
+    criteria: {
+      advance: "Advance toward opponent",
+      retreat: "Retreat to open distance",
+      circle_left: "Small half-step forward",
+      circle_right: "Small half-step backward",
+      hold: "Hold distance and draw commitment",
+    },
+  },
+  on_light: {
+    type: "choice",
+    instructions:
+      "React to a quick straight thrust. Delayed perception makes a late parry risky. Retreat to avoid by actual distance; counterthrust may produce double touches.",
+    criteria: {
+      block: "Timed matching parry",
+      parry: "Timed matching parry then riposte",
+      dodge: "Fast retreat out of point reach",
+      interrupt: "Counterthrust; accept double-touch risk",
+    },
+  },
+  on_heavy: {
+    type: "choice",
+    instructions:
+      "React to a committed lunge; its preparatory motion can be feinted. Timed parry-riposte or retreat and punish a short lunge.",
+    criteria: {
+      block: "Matching parry",
+      parry: "Parry then immediate riposte",
+      dodge: "Retreat outside lunge reach",
+      interrupt: "Counterthrust into preparation",
+    },
+  },
+  on_guardbreak: {
+    type: "choice",
+    instructions:
+      "Respond to a close blade beat, a preparation that displaces your blade but does not itself score.",
+    criteria: {
+      counter: "Recover blade line",
+      dodge: "Retreat outside beat distance",
+      interrupt: "Thrust before blade contact",
+      accept: "Accept displacement briefly then recover",
+    },
+  },
+  on_opening: {
+    type: "choice",
+    instructions:
+      "After a successful parry, choose a riposte. A quick thrust fits the opening. A lunge is useful if the opponent recovered distance.",
+    criteria: {
+      light: "Immediate thrust riposte",
+      heavy: "Lunge riposte",
+      recover: "Recover footwork and stamina",
+    },
+  },
+  after_feint: {
+    type: "choice",
+    instructions:
+      "Follow a false preparation with a new blade line or draw the counter. A beat prepares the next thrust.",
+    criteria: {
+      guardbreak: "Beat the blade",
+      light: "Quick thrust in a different line",
+      heavy: "Commit the lunge",
+      defend: "Draw and parry the counterthrust",
+    },
+  },
+};
 export const personas = {
   warden:
     "A disciplined knight. Patient but decisive. Defends incoming attacks, uses feints against guards, closes distance and punishes recovery.",
@@ -102,6 +205,14 @@ export const personas = {
     "A ferocious raider. Aggressive and unpredictable. Frequently mixes heavy and light cuts, closes distance relentlessly, but dodges when exhausted.",
   duelist:
     "A calculating duelist. Circles the enemy, baits attacks with feints, then punishes. Breaks repetitive guards and manages stamina carefully.",
+};
+const fencingPersonas = {
+  warden:
+    "A disciplined épée tactician: measures distance, prepares blade beats and feints, parries then ripostes.",
+  raider:
+    "An aggressive épée presser: takes piste space, mixes thrusts and committed lunges, manages double-touch risk.",
+  duelist:
+    "A patient épée counterfencer: draws lunges, retreats to make them short, parries and ripostes decisively.",
 };
 export function sample(distribution, random = Math.random) {
   const entries = Object.entries(distribution ?? {}).filter(
@@ -140,7 +251,14 @@ export async function ask(state, key) {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: "jev-latest", state, questions }),
+    body: JSON.stringify({
+      model: "jev-latest",
+      state:
+        state.discipline === "fencing"
+          ? { ...state, personality: fencingPersonas[state.persona] }
+          : state,
+      questions: state.discipline === "fencing" ? fencingQuestions : questions,
+    }),
     signal: AbortSignal.timeout(6000),
   });
   if (!response.ok) throw Error(`JEV HTTP ${response.status}`);
