@@ -175,6 +175,7 @@ test("cached attack intention does not override JEV's distance invitation", () =
   for (const movement of ["retreat", "hold"]) {
     const s = bout();
     const c = fencingController("warden");
+    c.engaged = true;
     c.cooldown = 0;
     const footwork = stepFencingAI(
       c,
@@ -186,6 +187,45 @@ test("cached attack intention does not override JEV's distance invitation", () =
     assert.equal(s.fencers[0].action, "ready");
     assert.ok(movement === "retreat" ? footwork < 0 : footwork === 0);
   }
+});
+test("opening retreat policies establish measure instead of walking to the back lines", () => {
+  const s = bout();
+  const cs = [fencingController("warden"), fencingController("warden")];
+  const policy = { tactic: "dodge", movement: "retreat" };
+  for (let tick = 0; tick < 120 && !cs.some((c) => c.engaged); tick++) {
+    const previousGap = s.fencers[1].x - s.fencers[0].x;
+    const moves = stepFencingPair(cs, s.fencers, [policy, policy], 1 / 120);
+    if (cs.some((c) => c.engaged)) break;
+    assert.ok(moves.every((move) => move >= 0));
+    assert.ok(s.fencers.every((f) => f.action === "ready"));
+    step(s, 1 / 120, moves);
+    assert.ok(s.fencers[1].x - s.fencers[0].x <= previousGap);
+  }
+  assert.ok(s.fencers.every((f) => f.action === "ready"));
+  assert.ok(s.fencers[1].x - s.fencers[0].x <= 2.23);
+});
+test("opening measure does not suppress defense against an actual commitment", () => {
+  const s = bout();
+  const c = fencingController("warden");
+  command(s.fencers[1], "lunge");
+  const policy = { tactic: "defend", movement: "retreat", on_heavy: "dodge" };
+  stepFencingAI(c, s.fencers[0], s.fencers[1], policy, 0.01);
+  stepFencingAI(c, s.fencers[0], s.fencers[1], policy, 0.08);
+  assert.equal(c.engaged, true);
+  assert.equal(s.fencers[0].action, "retreat");
+});
+test("a spent fencer can give ground without completing opening measure", () => {
+  const s = bout();
+  s.fencers[0].stamina = 15;
+  const c = fencingController("warden");
+  const move = stepFencingAI(
+    c,
+    s.fencers[0],
+    s.fencers[1],
+    { movement: "retreat" },
+    1 / 120,
+  );
+  assert.ok(move < 0);
 });
 test("a missed blade beat is not treated as a successful opening", () => {
   const s = bout();

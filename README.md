@@ -32,6 +32,8 @@ Each fencer retains a short history of observed attack lines, parries, retreats,
 
 The frontend deploys through GitHub Pages. The existing Cloudflare Worker at `iron-vow-jev.zancato-t.workers.dev` calls JEV without exposing the provider key. Existing CORS, request limits, validation, timeouts, and rate limits remain active. The optional `discipline: fencing` selects fencing questions; older melee clients still get their original questions.
 
+At each exchange opening, rested fencers establish useful distance before retreating to bait. They approach from outside lunge range and suppress unprovoked opening retreats until a fencer commits to an action. Defensive reactions and low-stamina recovery remain available immediately.
+
 ## Development
 
 ```sh

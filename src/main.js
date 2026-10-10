@@ -468,7 +468,7 @@ function observedState(side) {
     ...state.events
       .slice(-2)
       .map((e) => `${e.side === side ? "self" : "opponent"}: ${e.type}`),
-    `Distance ${Math.abs(f.x - foe.x).toFixed(1)}m; score self ${state.score[side]} opponent ${state.score[1 - side]}; opponent action ${foe.action} ${foe.elapsed.toFixed(2)}s`,
+    `Distance ${Math.abs(f.x - foe.x).toFixed(1)}m; score self ${state.score[side]} opponent ${state.score[1 - side]}; foe ${foe.action} ${foe.elapsed.toFixed(2)}s; ${controllers[side].engaged ? "engaged" : "opening measure"}`,
   ];
   return fencingState(f, foe, side === 0 ? playerPersona : persona, history);
 }

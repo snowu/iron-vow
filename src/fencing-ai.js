@@ -19,6 +19,7 @@ export function fencingController(persona, history = [], random = Math.random) {
     random,
     observed: null,
     compound: false,
+    engaged: false,
     openingSeen: -1,
     time: 0,
     cooldown: 0.32 + random() * 0.18,
@@ -56,6 +57,13 @@ export function stepFencingAI(c, self, foe, decision, dt) {
       c.history.push("opponent: cancelled preparation as a feint");
     }
     c.history = c.history.slice(-12);
+  }
+  c.engaged ||= self.serial > 0 || foe.serial > 0;
+  // Establish useful measure before inviting an attack. A visible commitment or
+  // low stamina still permits defense immediately, even at the opening distance.
+  const openingMeasure = !c.engaged && self.stamina >= 30;
+  if (openingMeasure && distance > 3.1) {
+    return decision?.movement === "advance" ? 1 : 0.5;
   }
   if (c.time > c.followupUntil) c.followup = null;
   if (
@@ -164,6 +172,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
             ? -0.5
             : 0;
   // JEV chooses intention; executable spacing respects the narrow piste.
+  if (openingMeasure && footwork < 0) footwork = distance > 2.2 ? 0.35 : 0;
   if (distance < 1.35) footwork = -0.65;
   if ((c.cooldown > 0 && !punish) || c.response) return footwork;
   self.line =
@@ -177,6 +186,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     return footwork;
   }
   if (tactic === "dodge") {
+    if (openingMeasure) return footwork;
     command(self, "retreat");
     c.cooldown = 0.4;
     return 0;
