@@ -41,10 +41,23 @@ Earlier balance/verification results describe the previous slow combat build and
 
 ## GitHub Pages
 
-Pushes to main run tests, build, and publish through `.github/workflows/pages.yml`. Vite uses the Pages project path for assets. Pages serves static files: the published demo explicitly uses local AI until an HTTPS JEV backend is configured. No API key belongs in frontend build variables.
+Pushes to main run tests, build, and publish through `.github/workflows/pages.yml`. Vite uses the Pages project path for assets. Pages serves static files and calls the Cloudflare Worker at `https://iron-vow-jev.zancato-t.workers.dev` for live JEV decisions. The repository variable `JEV_API_BASE_URL` selects this endpoint. The API key is a Cloudflare secret and is never in frontend build variables.
 
-To connect a separately hosted backend, set repository Actions variable `JEV_API_BASE_URL` to its HTTPS origin and rerun the workflow. The backend must allow CORS from the Pages origin. The existing localhost server remains the live-JEV development setup.
+To connect a separately hosted backend, set repository Actions variable `JEV_API_BASE_URL` to its HTTPS origin and rerun the workflow. The deployed Worker allows CORS from `https://snowu.github.io`. The existing localhost server remains the live-JEV development setup.
 
 ## Combat readability revision
 
-The camera now views the duel from the side, keeping both fighters and their swords visible. Enemy guard and incoming attack arrows appear above the enemy; a green arrow means your guard matches. Yellow OPEN indicates a punish window. Player guard buttons sit in the lower left. Sword trails show the cut path, and contact flows into the same recovery pose instead of snapping to a different pose. Blocked lights support followups, movement keeps full speed during swings, and attack inputs survive parry stagger. Mouse guard requires a deliberate 28-pixel motion. Pages local AI holds each decision for 350 ms rather than changing direction each simulation tick. Live JEV remains a separate backend requirement.
+The camera now views the duel from the side, keeping both fighters and their swords visible. Enemy guard and incoming attack arrows appear above the enemy; a green arrow means your guard matches. Yellow OPEN indicates a punish window. Player guard buttons sit in the lower left. Sword trails show the cut path, and contact flows into the same recovery pose instead of snapping to a different pose. Blocked lights support followups, movement keeps full speed during swings, and attack inputs survive parry stagger. Mouse guard requires a deliberate 28-pixel motion. Pages local AI holds each decision for 350 ms rather than changing direction each simulation tick. Live JEV now runs through the Cloudflare backend.
+
+## Cloudflare JEV backend
+
+`worker/index.js` uses the same nine-question JEV contract as the local Node server. `wrangler.jsonc` targets Worker `iron-vow-jev` in the existing Cloudflare account. It validates combat state, limits JSON bodies to 8 KiB, supplies server-owned personalities, applies per-IP (120/minute) and service (900/minute) rate limit bindings, and enables logs and sampled traces. Cloudflare rate limit counters are per location, approximate safeguards rather than a billing cap. Errors retain CORS headers so the game can show LOCAL fallback and retry. Requests to JEV time out after six seconds; the browser times out after nine.
+
+```sh
+npm run deploy:api  # deploy backend changes; existing secret is preserved
+npm run secret:api  # transfer existing env-loaded key directly to Worker secret stdin
+npm run dev:api     # local Worker runtime; local secrets require an ignored .dev.vars file
+API_URL=https://iron-vow-jev.zancato-t.workers.dev node tests/browser.mjs --systems --url=https://snowu.github.io/iron-vow/
+```
+
+Frontend pushes to main automatically redeploy GitHub Pages. Backend changes currently deploy through `npm run deploy:api`; they are not automatically deployed by the Pages workflow. Browser origins restrict browser access but are not user authentication. The backend never accepts a client-supplied upstream URL, model, API key, or question set.

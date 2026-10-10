@@ -67,7 +67,7 @@ if (process.argv.includes("--systems")) {
     { timeout: 30000 },
   );
   const health = await page.request.get(
-    new URL("/api/health", page.url()).toString(),
+    new URL("/api/health", process.env.API_URL || page.url()).toString(),
   );
   const info = await health.json();
   if (!info.production) throw Error("Expected built game");

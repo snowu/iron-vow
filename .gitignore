@@ -6,3 +6,7 @@ artifacts/
 .env.*
 *.pem
 *.key
+
+.wrangler/
+.dev.vars
+.dev.vars.*

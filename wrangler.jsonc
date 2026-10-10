@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "iron-vow-jev",
+  "main": "worker/index.js",
+  "account_id": "3dab85270c19e7a426145878daacaad7",
+  "compatibility_date": "2026-10-10",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": { "ALLOWED_ORIGIN": "https://snowu.github.io" },
+  "ratelimits": [
+    {
+      "name": "PLAYER_LIMIT",
+      "namespace_id": "57043181",
+      "simple": { "limit": 120, "period": 60 },
+    },
+    {
+      "name": "SERVICE_LIMIT",
+      "namespace_id": "57043182",
+      "simple": { "limit": 900, "period": 60 },
+    },
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+  },
+}

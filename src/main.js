@@ -652,6 +652,7 @@ async function think() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(state),
+      signal: AbortSignal.timeout(9000),
     });
     if (!res.ok) throw Error("JEV unavailable");
     const result = await res.json();

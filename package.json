@@ -11,7 +11,10 @@
     "test:browser": "node tests/browser.mjs",
     "start": "node --env-file=/home/snow/.config/typesafe/env server.mjs --production",
     "play": "npm run build && npm start",
-    "format": "prettier --write src tests analysis *.mjs index.html style.css README.md COMBAT_PLAN.md package.json"
+    "format": "prettier --write src tests analysis *.mjs index.html style.css README.md COMBAT_PLAN.md package.json",
+    "deploy:api": "wrangler deploy --config wrangler.jsonc",
+    "dev:api": "wrangler dev --config wrangler.jsonc",
+    "secret:api": "node --env-file=/home/snow/.config/typesafe/env scripts/upload-jev-secret.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
-    "prettier": "^3.9.10"
+    "prettier": "^3.9.10",
+    "wrangler": "^4.149.0"
   }
 }
