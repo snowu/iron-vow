@@ -5,6 +5,9 @@ function showLocalMode() {
     "LOCAL AI · JEV NOT CONNECTED";
   document.getElementById("connection").classList.add("offline");
   document.getElementById("brain-status").textContent = "LOCAL";
+  document.getElementById("brain-name").textContent = "LOCAL AI";
+  document.getElementById("enemy-brain-label").textContent = "LOCAL AI";
+  document.getElementById("intro-brain-label").textContent = "LOCAL SPARRING";
   document.getElementById("latency").textContent =
     "Static demo · connect a JEV backend for live decisions";
 }
@@ -25,6 +28,7 @@ import {
 import { controller, stepAI } from "./ai.js";
 import { stepDuel } from "./world.js";
 import { yawToTarget } from "./facing.js";
+import { swordPose } from "./pose.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("arena");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
@@ -205,6 +209,32 @@ const moteMesh = new THREE.InstancedMesh(
 scene.add(moteMesh);
 const moteMatrix = new THREE.Matrix4();
 
+function batchBone(bone) {
+  const batches = new Map();
+  for (const child of [...bone.children]) {
+    if (!child.isMesh) continue;
+    child.updateMatrix();
+    const batch = batches.get(child.material) || [];
+    batch.push(child);
+    batches.set(child.material, batch);
+  }
+  for (const [material, parts] of batches) {
+    if (parts.length < 2) continue;
+    const copies = parts.map((part) =>
+      part.geometry.clone().applyMatrix4(part.matrix),
+    );
+    const geometry = mergeGeometries(copies);
+    copies.forEach((copy) => copy.dispose());
+    if (!geometry) continue;
+    mesh(geometry, material, 0, 0, 0, bone);
+    // Preserve attachment transforms used by facing diagnostics.
+    parts.forEach((part) => {
+      part.visible = false;
+      part.geometry.dispose();
+    });
+  }
+}
+
 function knight(color) {
   const root = new THREE.Group();
   scene.add(root);
@@ -261,7 +291,8 @@ function knight(color) {
   sword.rotation.x = Math.PI;
   box(0.075, 0.28, 0.08, mats.dark, 0, 0.04, 0, sword);
   box(0.42, 0.06, 0.09, mats.gold, 0, 0.22, 0, sword);
-  box(0.1, 1.03, 0.035, mats.metal, 0, 0.77, 0, sword);
+  const bladeMaterial = mats.metal.clone();
+  box(0.1, 1.03, 0.035, bladeMaterial, 0, 0.77, 0, sword);
   mesh(new THREE.ConeGeometry(0.075, 0.24, 4), mats.metal, 0, 1.4, 0, sword);
   const cape = box(0.57, 0.95, 0.05, cloth, 0, 1.05, -0.28, body);
   cape.rotation.x = 0.18;
@@ -278,7 +309,40 @@ function knight(color) {
     root,
   );
   ring.rotation.x = Math.PI / 2;
-  return { root, body, arms, legs, sword, ring, visor, helm, cloth };
+  [body, ...arms, ...legs, sword].forEach(batchBone);
+  const trailGeometry = new THREE.BufferGeometry();
+  trailGeometry.setAttribute(
+    "position",
+    new THREE.BufferAttribute(new Float32Array(6 * 6 * 3), 3),
+  );
+  const trail = new THREE.Mesh(
+    trailGeometry,
+    new THREE.MeshBasicMaterial({
+      color: color === "player" ? "#83e5f5" : "#ff9a64",
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+    }),
+  );
+  trail.frustumCulled = false;
+  scene.add(trail);
+  return {
+    root,
+    body,
+    arms,
+    legs,
+    sword,
+    ring,
+    visor,
+    helm,
+    cloth,
+    bladeMaterial,
+    trail,
+    trailPoints: [],
+    serial: -1,
+    startPose: [0, 0, 0],
+  };
 }
 const pVisual = knight("player"),
   eVisual = knight("enemy");
@@ -440,7 +504,7 @@ window.addEventListener("pointermove", (event) => {
   if (mode !== "play" || paused) return;
   guardMouseX += event.movementX;
   guardMouseY += event.movementY;
-  if (Math.hypot(guardMouseX, guardMouseY) > 10) {
+  if (Math.hypot(guardMouseX, guardMouseY) > 28) {
     if (guardMouseY < -Math.abs(guardMouseX) * 0.8) setGuard("top");
     else if (Math.abs(guardMouseX) > Math.abs(guardMouseY) * 0.6)
       setGuard(guardMouseX < 0 ? "left" : "right");
@@ -633,8 +697,12 @@ async function think() {
     pending = false;
   }
 }
+let localPlan = null,
+  localPlanAt = -10;
 function localDecision() {
-  return {
+  if (localPlan && clock - localPlanAt < 0.35) return localPlan;
+  localPlanAt = clock;
+  return (localPlan = {
     tactic:
       player.action !== "idle"
         ? "defend"
@@ -642,8 +710,8 @@ function localDecision() {
           ? "light"
           : "heavy",
     attack_direction: directions[Math.floor(Math.random() * 3)],
-    guard_direction: "top",
-    on_light: "block",
+    guard_direction: directions[Math.floor(Math.random() * 3)],
+    on_light: Math.random() < 0.55 ? "block" : "interrupt",
     on_heavy: persona === "raider" ? "interrupt" : "parry",
     on_guardbreak: "counter",
     movement:
@@ -651,7 +719,7 @@ function localDecision() {
         ? "advance"
         : "hold",
     source: "local",
-  };
+  });
 }
 function ai(dt) {
   const d = decision && clock - decisionAt < 5 ? decision : localDecision();
@@ -670,12 +738,12 @@ function impact(a, b, strike, outcome) {
         : a === player
           ? "STRIKE"
           : "WOUNDED",
-      0.65,
+      0.25,
     );
   } else if (outcome === "block" || outcome === "parry") {
     burst(b, "#d3e8ed");
     tone(outcome === "parry" ? 850 : 570, "triangle", 0.18, 0.08);
-    announce(outcome === "parry" ? "PARRY" : "BLOCK", 0.55);
+    announce(outcome === "parry" ? "PARRY · COUNTER NOW" : "BLOCK", 0.25);
   } else if (outcome === "counter") {
     tone(400);
     announce("COUNTER BREAK", 0.6);
@@ -692,52 +760,67 @@ function animateKnight(v, f, other, dt) {
   v.body.position.y =
     Math.sin(clock * (moving ? 10 : 2)) * (moving ? 0.035 : 0.014);
   v.body.rotation.x = f.dodge > 0 ? 0.3 : 0;
-  let rx = -0.65,
-    rz = -0.35,
-    ry = 0;
-  if (f.guard === "top") {
-    rx = -2;
-    rz = 0.2;
-  } else if (f.guard === "left") {
-    rx = -1;
-    rz = -1.1;
-    ry = -0.6;
-  } else {
-    rx = -0.7;
-    rz = 0.9;
-    ry = 0.5;
+  const pose = swordPose(f);
+  if (v.serial !== f.attackSerial) {
+    v.serial = f.attackSerial;
+    v.startPose = [
+      v.arms[1].rotation.x,
+      v.arms[1].rotation.z,
+      v.arms[1].rotation.y,
+    ];
+    v.trailPoints.length = 0;
   }
-  if (specs[f.action]) {
-    const t = Math.min(1, f.elapsed / (f.wind || specs[f.action].wind));
-    const swing = THREE.MathUtils.smoothstep(t, 0.35, 1);
-    rx =
-      f.attackDir === "top" ? THREE.MathUtils.lerp(-2.5, -0.35, swing) : -1.05;
-    const side = f.attackDir === "left" ? -1 : 1;
-    rz =
-      f.attackDir === "top"
-        ? 0.1
-        : THREE.MathUtils.lerp(side * 1.45, -side * 0.95, swing);
-    ry =
-      f.attackDir === "top"
-        ? 0
-        : THREE.MathUtils.lerp(side * 0.8, -side * 0.5, swing);
-    v.body.rotation.y =
-      f.attackDir === "top" ? 0 : side * (0.12 - swing * 0.24);
-    if (f.action === "guardbreak") {
-      rx = -1.5;
-      rz = 0.2;
-    }
-  } else if (f.action === "recover") {
-    const t = Math.min(1, f.elapsed / 0.16);
-    rx = -0.35 - t * 0.4;
-    rz = f.attackDir === "left" ? 1 - t : -(1 - t);
-    ry = 0;
+  // Blend only the first 45 ms into a new swing, then follow its actual timeline.
+  const entry = specs[f.action] ? Math.min(1, f.elapsed / 0.045) : 1;
+  const target = pose.map((value, i) =>
+    specs[f.action]
+      ? THREE.MathUtils.lerp(v.startPose[i], value, entry)
+      : value,
+  );
+  const blend =
+    specs[f.action] || f.action === "recover" ? 1 : 1 - Math.exp(-dt * 30);
+  ["x", "z", "y"].forEach(
+    (axis, i) =>
+      (v.arms[1].rotation[axis] = THREE.MathUtils.lerp(
+        v.arms[1].rotation[axis],
+        target[i],
+        blend,
+      )),
+  );
+  const cut = specs[f.action] && f.elapsed / f.wind > 0.32;
+  v.bladeMaterial.emissive.set(
+    cut ? (v === pVisual ? "#3baabf" : "#ea673d") : "#000000",
+  );
+  v.root.updateMatrixWorld(true);
+  if (cut || (f.action === "recover" && f.elapsed < 0.07 && !f.feinted)) {
+    v.trailPoints.unshift([
+      v.sword.localToWorld(new THREE.Vector3(0, 0.3, 0)),
+      v.sword.localToWorld(new THREE.Vector3(0, 1.48, 0)),
+    ]);
+    v.trailPoints.length = Math.min(v.trailPoints.length, 7);
+  } else v.trailPoints.length = 0;
+  const points = v.trailPoints,
+    positions = v.trail.geometry.attributes.position;
+  let count = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    for (const point of [
+      points[i][0],
+      points[i][1],
+      points[i + 1][1],
+      points[i][0],
+      points[i + 1][1],
+      points[i + 1][0],
+    ])
+      positions.setXYZ(count++, point.x, point.y, point.z);
   }
-  v.arms[1].rotation.x = THREE.MathUtils.damp(v.arms[1].rotation.x, rx, 45, dt);
-  v.arms[1].rotation.z = THREE.MathUtils.damp(v.arms[1].rotation.z, rz, 45, dt);
-  v.arms[1].rotation.y = THREE.MathUtils.damp(v.arms[1].rotation.y, ry, 45, dt);
-  if (!specs[f.action])
-    v.body.rotation.y = THREE.MathUtils.damp(v.body.rotation.y, 0, 25, dt);
+  positions.needsUpdate = true;
+  v.trail.geometry.setDrawRange(0, count);
+  v.trail.visible = count > 0;
+  v.body.rotation.y =
+    specs[f.action] && f.action !== "guardbreak"
+      ? (f.attackDir === "left" ? -1 : f.attackDir === "right" ? 1 : 0) *
+        (0.16 - 0.32 * Math.min(1, f.elapsed / f.wind))
+      : THREE.MathUtils.damp(v.body.rotation.y, 0, 30, dt);
   v.arms[0].rotation.x = -0.7;
   v.arms[0].rotation.z = -0.15;
   v.root.rotation.z = f.stun > 0 ? Math.sin(clock * 25) * 0.04 : 0;
@@ -810,9 +893,9 @@ function frame(now) {
       player.z - enemy.z,
     ).normalize();
     desiredCamera.set(
-      player.x + offset.x * 5.4 + offset.z * 3.0,
-      3.8,
-      player.z + offset.z * 5.4 - offset.x * 3.0,
+      (player.x + enemy.x) / 2 + offset.x * 2.8 + offset.z * 7.5,
+      5.3,
+      (player.z + enemy.z) / 2 + offset.z * 2.8 - offset.x * 7.5,
     );
     look.set((player.x + enemy.x) / 2, 1, (player.z + enemy.z) / 2);
   }
@@ -837,6 +920,39 @@ function frame(now) {
     );
   }
   const incoming = specs[enemy.action];
+  const enemyScreen = new THREE.Vector3(enemy.x, 2.55, enemy.z).project(camera);
+  const enemyX = (enemyScreen.x * 0.5 + 0.5) * innerWidth,
+    enemyY = (-enemyScreen.y * 0.5 + 0.5) * innerHeight;
+  $("combat-read").style.left =
+    `${Math.max(130, Math.min(innerWidth - 130, enemyX))}px`;
+  $("combat-read").style.top = `${Math.max(170, enemyY - 112)}px`;
+  $("enemy-guard").textContent =
+    `GUARD ${enemy.guard === "left" ? "◀" : enemy.guard === "right" ? "▶" : "▲"}`;
+  $("enemy-guard").classList.toggle(
+    "opening",
+    enemy.stun > 0 || enemy.action === "recover",
+  );
+  $("enemy-guard").textContent =
+    enemy.stun > 0
+      ? "OPEN · COUNTERATTACK"
+      : enemy.action === "recover"
+        ? "OPEN · RECOVERING"
+        : $("enemy-guard").textContent;
+  $("attack-arrow").textContent = incoming
+    ? enemy.action === "guardbreak"
+      ? "✊"
+      : enemy.attackDir === "left"
+        ? "◀"
+        : enemy.attackDir === "right"
+          ? "▶"
+          : "▲"
+    : "";
+  $("combat-read").classList.toggle(
+    "matched",
+    !!incoming && enemy.attackDir === player.guard,
+  );
+  $("guard-label").textContent = `YOUR GUARD · ${player.guard.toUpperCase()}`;
+
   $("combat-read").classList.toggle("inactive", !incoming);
   $("attack-read").textContent = incoming
     ? enemy.action === "guardbreak"
@@ -854,9 +970,9 @@ function frame(now) {
         : player.buffer
           ? "FOLLOW-UP BUFFERED"
           : player.action === "parry"
-            ? "PARRY COMMITTED"
+            ? "PARRY"
             : player.chain > 1
-              ? "CHAIN FINISHER"
+              ? `CHAIN ${player.chain}/4`
               : player.stamina < 20
                 ? "LOW STAMINA"
                 : "";

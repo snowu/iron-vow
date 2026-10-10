@@ -147,3 +147,23 @@ test("early counterattack after parry is accepted", () => {
   run(f, 0.26);
   assert.equal(f.action, "light");
 });
+
+test("blocked lights keep the queued chain flowing", () => {
+  const a = fighter(0, 0),
+    b = fighter(0, 1);
+  begin(a, "light");
+  requestAttack(a, "light");
+  const contact = run(a, 0.21);
+  assert.equal(resolve(a, b, contact), "block");
+  run(a, 0.06);
+  assert.equal(a.action, "light");
+  assert.equal(a.chain, 2);
+});
+test("counterattack input survives a full parry stagger", () => {
+  const f = fighter(0, 0);
+  f.stun = 0.42;
+  assert.equal(requestAttack(f, "light"), "buffered");
+  run(f, 0.44);
+  assert.equal(f.action, "light");
+  assert.equal(f.attackSerial, 1);
+});

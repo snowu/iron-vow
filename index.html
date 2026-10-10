@@ -31,13 +31,18 @@
         <div id="score">○ ○ &nbsp; / &nbsp; ○ ○</div>
       </div>
       <div class="fighter-hud enemy">
-        <div class="label"><span id="enemy-name">THE WARDEN</span> JEV</div>
+        <div class="label">
+          <span id="enemy-name">THE WARDEN</span>
+          <span id="enemy-brain-label">JEV</span>
+        </div>
         <div class="health"><i id="e-health"></i></div>
         <div class="stamina"><i id="e-stamina"></i></div>
       </div>
     </section>
     <div id="notice"></div>
     <div id="combat-read" class="hidden">
+      <small id="enemy-guard"></small>
+      <strong id="attack-arrow"></strong>
       <b id="attack-read"></b>
       <div class="attack-meter"><i id="attack-progress"></i><span></span></div>
       <small id="player-read"></small>
@@ -45,12 +50,13 @@
     <div id="guard" class="hidden">
       <button data-dir="top" class="top">▲</button
       ><button data-dir="left" class="left">◀</button
-      ><button data-dir="right" class="right">▶</button><span>GUARD</span>
+      ><button data-dir="right" class="right">▶</button
+      ><span id="guard-label">YOUR GUARD</span>
     </div>
     <aside id="brain" class="hidden">
       <div class="eyebrow">THE OPPONENT'S MIND</div>
       <div class="brain-title">
-        JEV <span id="brain-status">Thinking…</span>
+        <b id="brain-name">JEV</b> <span id="brain-status">Thinking…</span>
       </div>
       <p id="intent">Reading the arena</p>
       <div id="probabilities"></div>
@@ -76,7 +82,7 @@
       </div>
       <button id="start" class="primary">ENTER THE RING <span>↗</span></button>
       <div class="intro-footer">
-        3D DIRECTIONAL COMBAT <span>POWERED BY JEV</span>
+        3D DIRECTIONAL COMBAT <span id="intro-brain-label">POWERED BY JEV</span>
       </div>
     </div>
     <div id="result" class="panel hidden">

@@ -581,3 +581,92 @@ h2 {
 .brand {
   pointer-events: none;
 }
+/* Combat information stays beside the opponent, away from the blade path. */
+#combat-read {
+  width: 240px;
+  top: auto;
+}
+#enemy-guard {
+  display: block;
+  color: #d0e6ed;
+  font-size: 13px;
+  letter-spacing: 2px;
+  background: #09141bcc;
+  padding: 5px 10px;
+  width: max-content;
+  margin: auto auto 6px;
+}
+#enemy-guard.opening {
+  color: #ffd66d;
+}
+#attack-arrow {
+  display: block;
+  font: 700 42px/1 sans-serif;
+  color: #ff8663;
+  filter: drop-shadow(0 0 6px #ff582b88);
+}
+#attack-read {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+#combat-read.matched #attack-arrow {
+  color: #80edcb;
+}
+#combat-read.matched .attack-meter i {
+  background: #80edcb;
+}
+#guard {
+  left: 110px;
+  top: auto;
+  bottom: 110px;
+  transform: none;
+}
+#guard span {
+  top: 95px;
+  text-align: center;
+  width: 190px;
+  left: -40px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+#guard button {
+  background: #0d222ee6;
+  border: 1px solid #54818c;
+  width: 42px;
+  height: 42px;
+}
+#guard button.active {
+  background: #317989;
+  color: #fff;
+  box-shadow: 0 0 15px #48bbd455;
+}
+#notice {
+  top: auto;
+  bottom: 100px;
+  font: 600 18px/1.4 sans-serif;
+  letter-spacing: 2px;
+}
+#brain {
+  opacity: 0.65;
+  transform: scale(0.8);
+  transform-origin: right bottom;
+}
+#player-read {
+  position: fixed;
+  bottom: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  #guard {
+    left: 65px;
+    bottom: 90px;
+  }
+  #brain {
+    display: none;
+  }
+  #combat-read {
+    width: 190px;
+  }
+}

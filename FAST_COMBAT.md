@@ -13,3 +13,9 @@ Player light startup is 200 ms; heavy startup is 380 ms. Guard switching takes 2
 - Live-JEV full best-of-three keyboard match finished two rounds with player health 61 each, enemy health 0, 42 live decisions, seven parries in each round, and verified restart. No browser exceptions. See artifacts/browser-smart.json.
 
 Automated checks verify behavior and runtime reliability; they do not establish subjective combat feel. Software-rendered Chromium remains slower than a hardware-rendered browser. This is a combat prototype and needs player feedback on this revision.
+
+## Readability and transitions followup
+
+The user rejected the first fast revision as unclear and clanky. This followup changes camera composition to a side view, places directional telegraphs and enemy guard/opening indicators above the enemy, moves player guard controls off the fighters, and adds a short sword trail. A shared pose function connects contact and recovery without resetting the arm, and transitions into chained strikes blend over the first 45 ms. Full movement speed continues through attacks. Blocked lights now accept chained followups; attack queues persist through a full parry stagger. Local Pages AI holds decisions for 350 ms instead of resampling every 120 Hz step. Mouse guard requires 28 pixels of deliberate movement. Static armor parts are batched per animated bone to reduce draw calls.
+
+Validation: 29 unit tests passed, including pose continuity in all three directions, blocked followups, and buffering through parry stagger. Actual browser input checks passed. A full live-JEV best-of-three match finished and restarted without browser errors (59 live decisions, eight parries each round). Three-personality live checks, facing, and outage recovery also passed. These checks do not establish subjective feel; the revision still needs player feedback. Pages continues to use explicitly labelled local AI until a remote JEV backend is connected.

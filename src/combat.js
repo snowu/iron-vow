@@ -91,6 +91,7 @@ export function begin(f, type) {
     f.hp <= 0
   )
     return false;
+  f.feinted = false;
   f.chain = chaining ? f.chain + 1 : 1;
   f.action = type;
   f.attackDir = f.guard;
@@ -118,12 +119,12 @@ export function requestAttack(f, type) {
       f.action === "recover" ||
       f.action === "dodge" ||
       f.action === "parry" ||
-      (f.stun < 0.2 && f.stun > 0))
+      f.stun > 0)
   ) {
     f.buffer = {
       type,
       dir: f.guard,
-      ttl: Math.min(0.75, Math.max(0.28, f.timer + 0.22)),
+      ttl: Math.min(0.75, Math.max(0.28, Math.max(f.timer, f.stun) + 0.22)),
     };
     return "buffered";
   }
@@ -143,7 +144,7 @@ export function requestDefense(f, type) {
     f.buffer = {
       type,
       dir: f.guard,
-      ttl: Math.min(0.7, Math.max(0.3, f.timer + 0.2)),
+      ttl: Math.min(0.7, Math.max(0.3, Math.max(f.timer, f.stun) + 0.2)),
     };
     return "buffered";
   }
@@ -157,6 +158,7 @@ export function feint(f) {
     f.exhausted
   )
     return false;
+  f.feinted = true;
   f.action = "recover";
   f.timer = 0.065;
   f.elapsed = 0;
@@ -377,8 +379,7 @@ export function resolve(a, b, strike) {
     b.blocks++;
     if (strike.type === "heavy") b.hp = Math.max(0, b.hp - 2);
     else {
-      a.chainAllowed = false;
-      a.timer = Math.max(a.timer, 0.1);
+      a.timer = Math.min(a.timer, 0.1);
     }
     a.lastOutcome = "block";
     return "block";

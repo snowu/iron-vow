@@ -11,8 +11,8 @@ export function stepDuel(
     player.action !== "dodge" &&
     player.grabbed === 0;
   if (player.moving) {
-    player.x += move.x * dt * (specs[player.action] ? 2.4 : 3.8);
-    player.z += move.z * dt * (specs[player.action] ? 2.4 : 3.8);
+    player.x += move.x * dt * 4.4;
+    player.z += move.z * dt * 4.4;
   }
   enemyStep(dt);
   for (const [f, other] of [

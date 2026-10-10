@@ -44,3 +44,7 @@ Earlier balance/verification results describe the previous slow combat build and
 Pushes to main run tests, build, and publish through `.github/workflows/pages.yml`. Vite uses the Pages project path for assets. Pages serves static files: the published demo explicitly uses local AI until an HTTPS JEV backend is configured. No API key belongs in frontend build variables.
 
 To connect a separately hosted backend, set repository Actions variable `JEV_API_BASE_URL` to its HTTPS origin and rerun the workflow. The backend must allow CORS from the Pages origin. The existing localhost server remains the live-JEV development setup.
+
+## Combat readability revision
+
+The camera now views the duel from the side, keeping both fighters and their swords visible. Enemy guard and incoming attack arrows appear above the enemy; a green arrow means your guard matches. Yellow OPEN indicates a punish window. Player guard buttons sit in the lower left. Sword trails show the cut path, and contact flows into the same recovery pose instead of snapping to a different pose. Blocked lights support followups, movement keeps full speed during swings, and attack inputs survive parry stagger. Mouse guard requires a deliberate 28-pixel motion. Pages local AI holds each decision for 350 ms rather than changing direction each simulation tick. Live JEV remains a separate backend requirement.
