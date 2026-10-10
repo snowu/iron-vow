@@ -204,6 +204,9 @@ try {
     if (ai) {
       assert.ok(state.brains.player.liveCount > 1);
       assert.ok(state.brains.player.decision.model.startsWith("jev-"));
+      assert.equal(state.brains.player.liveCount, state.brains.enemy.liveCount);
+      for (const brain of [state.brains.player, state.brains.enemy])
+        assert.ok(["light", "heavy"].includes(brain.decision.initiative));
     }
   }
   await page.screenshot({ path: "artifacts/fencing-result.png" });
@@ -221,6 +224,12 @@ try {
     blueDecisions: state.brains.player.liveCount,
     redDecisions: state.brains.enemy.liveCount,
     model: state.brains.enemy.decision.model,
+    initiatives: ai
+      ? [
+          state.brains.player.decision?.initiative,
+          state.brains.enemy.decision?.initiative,
+        ]
+      : undefined,
     restart: true,
     pause: true,
     errors,

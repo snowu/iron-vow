@@ -243,6 +243,88 @@ test("a missed blade beat is not treated as a successful opening", () => {
   assert.equal(s.fencers[0].action, "beat");
   assert.equal(s.fencers[0].queue, null);
 });
+test("two passive JEV policies take model-selected initiative within bounded time", () => {
+  for (const initiative of ["light", "heavy"]) {
+    const s = bout();
+    const cs = [
+      fencingController("warden", [], seeded(1)),
+      fencingController("warden", [], seeded(2)),
+    ];
+    const policy = {
+      tactic: "defend",
+      movement: "hold",
+      initiative,
+      attack_direction: "right",
+      on_light: "accept",
+      on_heavy: "accept",
+    };
+    let committed = false;
+    for (let tick = 0; tick < 120 * 4; tick++) {
+      step(
+        s,
+        1 / 120,
+        stepFencingPair(cs, s.fencers, [policy, policy], 1 / 120),
+      );
+      if (
+        s.fencers.some(
+          (f) =>
+            f.action === (initiative === "heavy" ? "lunge" : "thrust") &&
+            f.elapsed >= 0.08,
+        )
+      ) {
+        committed = true;
+        break;
+      }
+    }
+    assert.ok(committed, initiative);
+    assert.ok(
+      cs.some((c) => c.history.some((h) => h.includes("took initiative"))),
+    );
+  }
+});
+test("repeated feints do not indefinitely postpone a committed initiative attack", () => {
+  const s = bout();
+  cSetup(s);
+  const c = fencingController("warden", [], seeded(5));
+  const policy = {
+    tactic: "feint",
+    movement: "hold",
+    after_feint: "defend",
+    initiative: "heavy",
+    attack_direction: "left",
+  };
+  let committed = false;
+  for (let tick = 0; tick < 120 * 4; tick++) {
+    step(s, 1 / 120, [
+      stepFencingAI(c, s.fencers[0], s.fencers[1], policy, 1 / 120),
+      0,
+    ]);
+    if (s.fencers[0].action === "lunge" && s.fencers[0].elapsed >= 0.08) {
+      committed = true;
+      break;
+    }
+  }
+  assert.ok(committed);
+  assert.ok(c.history.some((h) => h.includes("took initiative")));
+});
+test("initiative still reacts to an opponent who commits first", () => {
+  const s = bout();
+  cSetup(s);
+  const c = fencingController("warden");
+  c.initiative = "heavy";
+  command(s.fencers[1], "lunge");
+  s.fencers[1].elapsed = 0.09;
+  const policy = {
+    tactic: "defend",
+    movement: "hold",
+    initiative: "heavy",
+    on_heavy: "dodge",
+  };
+  stepFencingAI(c, s.fencers[0], s.fencers[1], policy, 0.01);
+  stepFencingAI(c, s.fencers[0], s.fencers[1], policy, 0.08);
+  assert.equal(c.initiative, null);
+  assert.equal(s.fencers[0].action, "retreat");
+});
 function seeded(seed) {
   return () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -251,6 +333,7 @@ function seeded(seed) {
 }
 test("swapping colors preserves seeded tactical bouts", () => {
   const policy = {
+    initiative: "heavy",
     movement: "advance",
     on_light: "parry",
     on_heavy: "dodge",

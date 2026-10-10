@@ -173,5 +173,7 @@ test("fencing clients reach JEV with fencing instructions and server-owned perso
   assert.equal(sent.state.discipline, "fencing");
   assert.match(sent.questions.tactic.instructions, /épée/);
   assert.match(sent.state.personality, /épée/);
-  assert.equal(Object.keys((await response.json()).probabilities).length, 9);
+  const result = await response.json();
+  assert.equal(Object.keys(result.probabilities).length, 10);
+  assert.ok(["light", "heavy"].includes(result.initiative));
 });

@@ -98,6 +98,15 @@ export const questions = {
 // Preserve typed choice keys for existing clients; the fencing client maps them
 // to thrust/lunge/beat/retreat. No melee tactic reaches the fencing simulation.
 export const fencingQuestions = {
+  initiative: {
+    type: "choice",
+    instructions:
+      "Both fencers may try to draw an attack. Choose a committed attack to take initiative if neither produces real pressure for a short interval. Use distance, stamina, and observed parries to choose a straight thrust or lunge; this attack must finish rather than be feinted. Other tactical choices still handle short invitations and preparations. Do not wait indefinitely for a passive opponent.",
+    criteria: {
+      light: "Close to thrust distance and commit a straight thrust",
+      heavy: "Take initiative with a committed lunge from longer measure",
+    },
+  },
   tactic: {
     type: "choice",
     instructions:
@@ -227,9 +236,9 @@ export function sample(distribution, random = Math.random) {
   }
   return entries.at(-1)[0];
 }
-export function decode(body) {
+export function decode(body, schema = questions) {
   const decision = {};
-  for (const [key, q] of Object.entries(questions)) {
+  for (const [key, q] of Object.entries(schema)) {
     const answer = body.answers?.[key];
     if (
       !answer ||
@@ -264,7 +273,10 @@ export async function ask(state, key) {
   if (!response.ok) throw Error(`JEV HTTP ${response.status}`);
   const body = await response.json();
   return {
-    ...decode(body),
+    ...decode(
+      body,
+      state.discipline === "fencing" ? fencingQuestions : questions,
+    ),
     probabilities: Object.fromEntries(
       Object.entries(body.answers).map(([k, v]) => [k, v.probabilities]),
     ),

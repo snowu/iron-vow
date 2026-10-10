@@ -34,6 +34,8 @@ The frontend deploys through GitHub Pages. The existing Cloudflare Worker at `ir
 
 At each exchange opening, rested fencers establish useful distance before retreating to bait. They approach from outside lunge range and suppress unprovoked opening retreats until a fencer commits to an action. Defensive reactions and low-stamina recovery remain available immediately.
 
+Invitations have a bounded patience window, varied by profile and independently of color. When real pressure stays absent, JEV's separate `initiative` choice commits a thrust or lunge and closes to that attack's range. Feints do not reset this window; an incoming committed attack still triggers normal defense. The initiative choice is model-supplied, rather than a hidden replacement policy.
+
 ## Development
 
 ```sh

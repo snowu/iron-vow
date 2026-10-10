@@ -20,6 +20,11 @@ export function fencingController(persona, history = [], random = Math.random) {
     observed: null,
     compound: false,
     engaged: false,
+    quietTime: 0,
+    patience:
+      (persona === "raider" ? 0.75 : persona === "duelist" ? 1.35 : 1.1) +
+      random() * 0.45,
+    initiative: null,
     openingSeen: -1,
     time: 0,
     cooldown: 0.32 + random() * 0.18,
@@ -46,6 +51,18 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   const distance = Math.abs(self.x - foe.x),
     pick = (key) =>
       weighted(decision?.probabilities?.[key], c.random) || decision?.[key];
+  const pressure = [self, foe].some(
+    (f) =>
+      ["thrust", "lunge"].includes(f.action) &&
+      f.elapsed >= 0.08 &&
+      f.elapsed <= MOVES[f.action].contactEnd,
+  );
+  c.quietTime = pressure ? 0 : c.quietTime + dt;
+  if (pressure) c.initiative = null;
+  if (!c.initiative && c.quietTime > c.patience && self.stamina >= 18) {
+    const initiative = pick("initiative");
+    if (["light", "heavy"].includes(initiative)) c.initiative = initiative;
+  }
   const observation = `${foe.serial}:${foe.action}:${foe.attackLine}`;
   if (observation !== c.observed) {
     c.observed = observation;
@@ -159,7 +176,10 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     distance < 3 &&
     decision?.on_opening;
   const tactic =
-    c.followup || (punish ? pick("on_opening") : pick("tactic")) || "light";
+    c.initiative ||
+    c.followup ||
+    (punish ? pick("on_opening") : pick("tactic")) ||
+    "light";
   let move = decision?.movement || "advance";
   let footwork =
     move === "retreat"
@@ -173,8 +193,11 @@ export function stepFencingAI(c, self, foe, decision, dt) {
             : 0;
   // JEV chooses intention; executable spacing respects the narrow piste.
   if (openingMeasure && footwork < 0) footwork = distance > 2.2 ? 0.35 : 0;
+  if (c.initiative)
+    footwork = distance > (tactic === "heavy" ? 3.1 : 2) ? 0.65 : 0.15;
   if (distance < 1.35) footwork = -0.65;
-  if ((c.cooldown > 0 && !punish) || c.response) return footwork;
+  if ((c.cooldown > 0 && !punish && !c.initiative) || c.response)
+    return footwork;
   self.line =
     lineMap[pick("attack_direction")] || lines[Math.floor(c.random() * 3)];
   if (c.followup && self.line === c.feintedLine)
@@ -200,6 +223,12 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   if (distance > (type === "lunge" ? 3.1 : type === "beat" ? 2.3 : 2.0))
     return footwork;
   if (command(self, type)) {
+    if (c.initiative) {
+      c.history.push(`self: took initiative with ${type} after mutual waiting`);
+      c.history = c.history.slice(-12);
+      c.initiative = null;
+      c.quietTime = 0;
+    }
     if (punish) c.openingSeen = foe.serial;
     c.compound = Boolean(c.followup);
     c.followup = null;
