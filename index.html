@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Iron Vow • The Ashen Ring</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <canvas id="arena" aria-label="3D sword fighting arena"></canvas>
+    <div class="vignette"></div>
+    <header>
+      <div class="brand">
+        IV <span>IRON VOW<small>THE ASHEN RING</small></span>
+      </div>
+      <div class="top-right">
+        <span id="connection" class="badge">JEV · CONNECTING</span
+        ><button id="quality">QUALITY HIGH</button
+        ><button id="sound">SOUND OFF</button
+        ><button id="help">CONTROLS</button>
+      </div>
+    </header>
+    <section id="hud" class="hidden">
+      <div class="fighter-hud player">
+        <div class="label">YOU <span>THE EXILE</span></div>
+        <div class="health"><i id="p-health"></i></div>
+        <div class="stamina"><i id="p-stamina"></i></div>
+      </div>
+      <div class="round">
+        <small>BEST OF THREE</small><b id="round">ROUND 1</b>
+        <div id="score">○ ○ &nbsp; / &nbsp; ○ ○</div>
+      </div>
+      <div class="fighter-hud enemy">
+        <div class="label"><span id="enemy-name">THE WARDEN</span> JEV</div>
+        <div class="health"><i id="e-health"></i></div>
+        <div class="stamina"><i id="e-stamina"></i></div>
+      </div>
+    </section>
+    <div id="notice"></div>
+    <div id="combat-read" class="hidden">
+      <b id="attack-read"></b>
+      <div class="attack-meter"><i id="attack-progress"></i><span></span></div>
+      <small id="player-read"></small>
+    </div>
+    <div id="guard" class="hidden">
+      <button data-dir="top" class="top">▲</button
+      ><button data-dir="left" class="left">◀</button
+      ><button data-dir="right" class="right">▶</button><span>GUARD</span>
+    </div>
+    <aside id="brain" class="hidden">
+      <div class="eyebrow">THE OPPONENT'S MIND</div>
+      <div class="brain-title">
+        JEV <span id="brain-status">Thinking…</span>
+      </div>
+      <p id="intent">Reading the arena</p>
+      <div id="probabilities"></div>
+      <small id="latency">Live decisions · typed probabilities</small>
+    </aside>
+    <div id="intro" class="panel">
+      <div class="eyebrow">A DUEL OF INTENT</div>
+      <h1>IRON<br /><em>VOW</em></h1>
+      <p>
+        Steel has three directions.<br />Survival has one rule: read your enemy.
+      </p>
+      <div class="select-label">CHOOSE YOUR OPPONENT</div>
+      <div class="personas">
+        <button class="selected" data-persona="warden">
+          01 <strong>WARDEN</strong
+          ><small>Disciplined · balanced</small></button
+        ><button data-persona="raider">
+          02 <strong>RAIDER</strong
+          ><small>Relentless · aggressive</small></button
+        ><button data-persona="duelist">
+          03 <strong>DUELIST</strong><small>Patient · deceptive</small>
+        </button>
+      </div>
+      <button id="start" class="primary">ENTER THE RING <span>↗</span></button>
+      <div class="intro-footer">
+        3D DIRECTIONAL COMBAT <span>POWERED BY JEV</span>
+      </div>
+    </div>
+    <div id="result" class="panel hidden">
+      <div class="eyebrow" id="result-label">ROUND OVER</div>
+      <h2 id="result-title">VICTORY</h2>
+      <p id="result-detail"></p>
+      <button id="next" class="primary">NEXT ROUND ↗</button
+      ><button id="menu">CHANGE OPPONENT</button>
+    </div>
+    <div id="instructions" class="modal hidden">
+      <div>
+        <button id="close-help">CLOSE ✕</button>
+        <h2>Read. React. Riposte.</h2>
+        <p>
+          Match your guard to the incoming red direction to block. Change
+          direction to find an opening.
+        </p>
+        <dl>
+          <dt>W A S D</dt>
+          <dd>Move / circle enemy</dd>
+          <dt>← ↑ → or Q E R</dt>
+          <dd>
+            Left / top / right guard and attack direction (or move the mouse)
+          </dd>
+          <dt>Left click / J</dt>
+          <dd>Light attack</dd>
+          <dt>Right click / K</dt>
+          <dd>Heavy attack</dd>
+          <dt>F</dt>
+          <dd>Feint a heavy during windup</dd>
+          <dt>G</dt>
+          <dd>Guard break / counter incoming grab</dd>
+          <dt>SPACE</dt>
+          <dd>Dodge in your movement direction</dd>
+          <dt>SHIFT</dt>
+          <dd>Committed parry (match direction just before impact)</dd>
+          <dt>ESC</dt>
+          <dd>Pause / resume</dd>
+        </dl>
+        <p>
+          Inputs near recovery buffer into a four-hit chain. Stamina fuels
+          attacks and dodges. Guard breaks beat passive defense; dodges and a
+          timed G counter beat guard breaks. Dodge recovery can be punished. A
+          parry opens the enemy to a counterattack.
+        </p>
+      </div>
+    </div>
+    <footer id="controls" class="hidden">
+      <span><b>WASD</b> MOVE</span><span><b>MOUSE / ARROWS</b> GUARD</span
+      ><span><b>LMB / RMB</b> LIGHT / HEAVY</span><span><b>SPACE</b> DODGE</span
+      ><span><b>G</b> BREAK</span><span><b>F</b> FEINT</span
+      ><span><b>SHIFT</b> PARRY</span>
+    </footer>
+    <div id="paused" class="modal hidden">
+      <div>
+        <h2>PAUSED</h2>
+        <p>Press Escape to return to the ring.</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
