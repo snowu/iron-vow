@@ -42,3 +42,35 @@ test("feint returns toward guard without playing the contact pose", () => {
   });
   assert.deepEqual(pose, swordPose({ action: "idle", guard: "top" }));
 });
+
+test("arm poses keep elbows bending forward without sideways shoulder dislocation", () => {
+  for (const guard of ["left", "top", "right"])
+    for (const action of [
+      "idle",
+      "light",
+      "heavy",
+      "recover",
+      "parry",
+      "guardbreak",
+      "dodge",
+    ])
+      for (let elapsed = 0; elapsed <= 0.4; elapsed += 1 / 120) {
+        const pose = swordPose({
+          guard,
+          attackDir: guard,
+          action,
+          elapsed,
+          wind: 0.4,
+          lastType: "heavy",
+        });
+        assert.ok(pose.every(Number.isFinite));
+        assert.ok(
+          pose[3] <= 0 && pose[3] >= -2.2,
+          "elbow must bend forward within its joint limit",
+        );
+        assert.ok(
+          Math.abs(pose[1]) <= 0.6,
+          "upper arm must not swing sideways through the torso",
+        );
+      }
+});

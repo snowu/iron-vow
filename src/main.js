@@ -244,12 +244,16 @@ function knight(color) {
     arm.add(elbow);
     box(0.14, 0.25, 0.17, mats.metal, 0, -0.125, 0, elbow);
     box(0.13, 0.13, 0.13, mats.dark, 0, -0.3, 0, elbow);
+    const wrist = new THREE.Group();
+    wrist.position.y = -0.3;
+    elbow.add(wrist);
+    arm.userData.wrist = wrist;
     arm.userData.elbow = elbow;
     arms.push(arm);
   }
   const sword = new THREE.Group();
-  arms[1].userData.elbow.add(sword);
-  sword.position.set(0, -0.3, 0);
+  arms[1].userData.wrist.add(sword);
+  sword.position.set(0, 0, 0);
   sword.rotation.x = Math.PI;
   box(0.075, 0.28, 0.08, mats.dark, 0, 0.04, 0, sword);
   box(0.42, 0.06, 0.09, mats.gold, 0, 0.22, 0, sword);
@@ -859,8 +863,7 @@ function animateKnight(v, f, other, dt) {
   v.legs[1].rotation.x = -stride;
   v.legs[0].userData.knee.rotation.x = Math.max(0, stride) * 1.2 + 0.12;
   v.legs[1].userData.knee.rotation.x = Math.max(0, -stride) * 1.2 + 0.12;
-  v.arms[1].userData.elbow.rotation.x = 0.15;
-  v.arms[0].userData.elbow.rotation.x = 0.65;
+  v.arms[0].userData.elbow.rotation.x = -1.05;
   v.body.position.y = moving ? Math.abs(stride) * 0.045 : 0;
   v.body.rotation.x = THREE.MathUtils.damp(
     v.body.rotation.x,
@@ -869,13 +872,15 @@ function animateKnight(v, f, other, dt) {
     dt,
   );
   let pose = swordPose(f);
-  if (f.blockFlash > 0 || f.parryFlash > 0) pose = [-1.65, 0.2, 0];
+  if (f.blockFlash > 0 || f.parryFlash > 0) pose = [-1.1, 0.12, 0, -1.1, 0.2];
   if (v.serial !== f.attackSerial) {
     v.serial = f.attackSerial;
     v.startPose = [
       v.arms[1].rotation.x,
       v.arms[1].rotation.z,
       v.arms[1].rotation.y,
+      v.arms[1].userData.elbow.rotation.x,
+      v.arms[1].userData.wrist.rotation.x,
     ];
     v.trailPoints.length = 0;
   }
@@ -888,13 +893,20 @@ function animateKnight(v, f, other, dt) {
   );
   const blend =
     specs[f.action] || f.action === "recover" ? 1 : 1 - Math.exp(-dt * 30);
-  ["x", "z", "y"].forEach(
-    (axis, i) =>
-      (v.arms[1].rotation[axis] = THREE.MathUtils.lerp(
-        v.arms[1].rotation[axis],
-        target[i],
-        blend,
-      )),
+  // Shoulder rotation follows the shortest arc; elbows bend forward in one plane.
+  const shoulderTarget = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(target[0], target[2], target[1]),
+  );
+  v.arms[1].quaternion.slerp(shoulderTarget, blend);
+  v.arms[1].userData.elbow.rotation.x = THREE.MathUtils.lerp(
+    v.arms[1].userData.elbow.rotation.x,
+    target[3],
+    blend,
+  );
+  v.arms[1].userData.wrist.rotation.x = THREE.MathUtils.lerp(
+    v.arms[1].userData.wrist.rotation.x,
+    target[4],
+    blend,
   );
   const cut = specs[f.action] && f.elapsed > f.wind - 0.085;
   v.bladeMaterial.emissive.set(
@@ -930,8 +942,8 @@ function animateKnight(v, f, other, dt) {
       ? (f.attackDir === "left" ? -1 : f.attackDir === "right" ? 1 : 0) *
         (0.16 - 0.32 * Math.min(1, f.elapsed / f.wind))
       : THREE.MathUtils.damp(v.body.rotation.y, 0, 30, dt);
-  v.arms[0].rotation.x = -0.7;
-  v.arms[0].rotation.z = -0.15;
+  v.arms[0].rotation.x = -0.35;
+  v.arms[0].rotation.z = -0.2;
   v.root.rotation.z = 0;
   if (f.hp <= 0) {
     v.body.rotation.z = THREE.MathUtils.damp(v.body.rotation.z, 1.3, 4, dt);

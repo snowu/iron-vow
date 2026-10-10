@@ -1,13 +1,13 @@
 // Attack and recovery share the same endpoint so contact never resets the sword.
 const guards = {
-  top: [-2, 0.2, 0],
-  left: [-1, -1.1, -0.6],
-  right: [-0.7, 0.9, 0.5],
+  top: [-1.45, 0.12, 0, -0.95, 0],
+  left: [-0.8, -0.35, -0.65, -1.05, 0],
+  right: [-0.8, 0.4, 0.65, -1.05, 0],
 };
 const ends = {
-  top: [-1.3, 0.1, 0],
-  left: [-1, 1.15, 0.65],
-  right: [-1, -1.15, -0.65],
+  top: [-0.75, 0.1, 0, -0.55, -0.25],
+  left: [-0.8, 0.4, 0.7, -0.55, 0],
+  right: [-0.8, -0.35, -0.7, -0.55, 0],
 };
 const smooth = (t) => {
   t = Math.max(0, Math.min(1, t));
@@ -21,19 +21,31 @@ export function swordPose(f) {
     const t = f.elapsed / f.wind;
     const start = guards[dir],
       end = ends[dir];
-    const coil = [start[0] - 0.25, start[1] * 1.15, start[2] * 1.15];
+    const coil = [
+      start[0] - 0.12,
+      start[1],
+      start[2],
+      start[3] - 0.15,
+      start[4],
+    ];
     const release = 1 - 0.085 / f.wind;
     return t < release
       ? mix(start, coil, smooth(f.elapsed / 0.035))
       : mix(coil, end, smooth((t - release) / (1 - release)));
   }
   if (f.action === "guardbreak")
-    return mix(guard, [-1.4, 0, 0], smooth(f.elapsed / f.wind));
+    return mix(guard, [-0.9, 0, 0, -0.3, 0], smooth(f.elapsed / f.wind));
   if (f.action === "recover" && !f.feinted) {
-    const end = f.lastType === "guardbreak" ? [-1.4, 0, 0] : ends[dir];
+    const end = f.lastType === "guardbreak" ? [-0.9, 0, 0, -0.3, 0] : ends[dir];
     return mix(end, guard, smooth((f.elapsed - 0.035) / 0.14));
   }
   if (f.action === "parry")
-    return [-1.5, dir === "left" ? -0.65 : dir === "right" ? 0.65 : 0, 0];
+    return [
+      -1.1,
+      dir === "left" ? -0.25 : dir === "right" ? 0.25 : 0,
+      0,
+      -1.1,
+      0.2,
+    ];
   return guard;
 }
