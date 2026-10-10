@@ -766,3 +766,206 @@ h2 {
     flex-wrap: wrap;
   }
 }
+/* Training-ring presentation. */
+:root {
+  --gold: #b5ebee;
+}
+body {
+  font-family: Inter, Arial, sans-serif;
+  color: #d7e9f0;
+}
+.vignette {
+  opacity: 0.3;
+}
+.brand {
+  color: #80d5dd;
+  font-family: Arial, sans-serif;
+  font-weight: 800;
+}
+h1,
+h2 {
+  font-family: Arial, sans-serif;
+  font-weight: 800;
+  letter-spacing: -3px;
+}
+h1 {
+  font-size: 70px;
+  line-height: 0.92;
+}
+h1 em {
+  color: #63ccd7;
+  font-style: normal;
+}
+.panel p {
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #99afbf;
+}
+.panel {
+  background: linear-gradient(125deg, #101e2bea, #101e2b88);
+  border: 1px solid #48627255;
+  border-radius: 12px;
+  padding: 25px;
+  backdrop-filter: blur(12px);
+}
+.personas button,
+.mode-select button {
+  border-radius: 6px;
+  background: #111f2bdd;
+}
+.primary {
+  border-radius: 6px;
+  background: #62cbd4;
+  color: #101b27;
+  font-weight: 700;
+}
+.primary:hover {
+  background: #a9e9ed;
+}
+button {
+  font-family: Arial, sans-serif;
+}
+header {
+  padding-top: 22px;
+}
+#hud {
+  top: 95px;
+}
+.health {
+  height: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.player .health i {
+  background: #66d9e1;
+}
+.enemy .health i {
+  background: #fa8770;
+}
+.stamina {
+  height: 3px;
+  opacity: 0.75;
+}
+#brain,
+#brain-player {
+  opacity: 0.85;
+  width: 220px;
+  transform: none;
+  background: #0c1825cc;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #47637644;
+}
+#brain {
+  right: 24px;
+  bottom: 70px;
+}
+#brain-player {
+  left: 24px;
+  bottom: 70px;
+}
+#brain .eyebrow,
+#brain-player .eyebrow {
+  letter-spacing: 1px;
+  font-size: 9px;
+}
+.brain-title {
+  display: none;
+}
+#intent,
+#player-intent {
+  font:
+    600 11px/1.4 Arial,
+    sans-serif;
+  color: #c8e0e9;
+  letter-spacing: 0.5px;
+}
+#probabilities,
+#player-probabilities {
+  display: none;
+}
+.show-insights #probabilities,
+.show-insights #player-probabilities {
+  display: block;
+}
+#latency,
+#player-latency {
+  font-size: 9px;
+  color: #87a2b3;
+}
+#human-settings {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+  margin: 10px 0;
+  color: #adc5d0;
+}
+#human-settings small {
+  color: #708897;
+  font-size: 9px;
+}
+#human-settings input {
+  accent-color: #65d0d8;
+}
+#combat-read {
+  width: 170px;
+}
+#enemy-guard {
+  border-radius: 5px;
+  font:
+    600 10px/1.2 Arial,
+    sans-serif;
+  letter-spacing: 1px;
+}
+#attack-arrow {
+  font-size: 30px;
+}
+#attack-read {
+  font-size: 10px;
+}
+#notice {
+  color: #d2eff3;
+  bottom: 145px;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+#controls {
+  font-size: 9px;
+  opacity: 0.65;
+}
+@media (max-height: 850px) {
+  .panel {
+    top: 12%;
+  }
+  h1 {
+    font-size: 54px;
+    margin: 10px 0;
+  }
+  .personas button {
+    padding: 9px;
+  }
+  .select-label {
+    margin-top: 9px;
+  }
+}
+@media (max-width: 700px) {
+  .panel {
+    width: calc(100% - 40px);
+    left: 20px;
+    padding: 15px;
+  }
+  #brain,
+  #brain-player {
+    width: 150px;
+    padding: 8px;
+  }
+  #human-settings {
+    flex-wrap: wrap;
+  }
+  .top-right button {
+    font-size: 9px;
+    padding: 7px;
+  }
+}

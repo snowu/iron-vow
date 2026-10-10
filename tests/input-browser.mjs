@@ -32,6 +32,7 @@ await page.route("**/api/decision", (r) =>
   r.fulfill({ contentType: "application/json", body: JSON.stringify(policy) }),
 );
 await page.goto("http://localhost:4318");
+await page.check("#manual-directions");
 await page.click("#start");
 await page.waitForFunction(() => window.__IRON_VOW__.getState().liveCount > 0);
 const early = await page.evaluate(() => {
@@ -79,22 +80,40 @@ const defense = await page.evaluate(() => {
   window.dispatchEvent(
     new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true }),
   );
-  return window.__IRON_VOW__.getState().player.buffer;
+  return window.__IRON_VOW__.getState().player;
 });
-if (defense?.type !== "dodge")
-  throw Error("Defensive input discarded during swing");
+if (defense.action !== "dodge")
+  throw Error("Early dodge failed to cancel anticipation");
+await page.reload();
+await page.click("#start");
+const assisted = await page.evaluate(() => {
+  const press = (key) =>
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  press("j");
+  const light = window.__IRON_VOW__.getState().player;
+  press("k");
+  const heavy = window.__IRON_VOW__.getState().player;
+  return { light, heavy };
+});
+if (
+  assisted.light.action !== "light" ||
+  assisted.light.attackDir !== "left" ||
+  assisted.heavy.buffer?.dir !== "top"
+)
+  throw Error("Assisted light/heavy directions failed");
 await page.waitForFunction(
-  () => window.__IRON_VOW__.getState().player.action === "dodge",
+  () => window.__IRON_VOW__.getState().player.attackSerial >= 2,
 );
 await page.screenshot({ path: "artifacts/fast-combat.png" });
 const result = {
   fixture: true,
+  assistedDirections: true,
   immediateAttack: true,
   earlyFollowupQueued: true,
   movementDuringAttack: true,
   overlayClickAccepted: true,
   mouseGuard: true,
-  defensiveBuffer: true,
+  earlyDodgeCancel: true,
   errors,
   fps: guard.fps,
 };

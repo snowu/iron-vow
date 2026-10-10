@@ -187,6 +187,25 @@ if (process.argv.includes("--match")) {
               );
               last = performance.now();
             }
+            const forward = s.cameraForward;
+            if (forward) {
+              const dx = s.enemy.x - s.player.x,
+                dz = s.enemy.z - s.player.z;
+              const f = dx * forward.x + dz * forward.z,
+                r = dx * -forward.z + dz * forward.x;
+              for (const [key, on] of [
+                ["w", f > 0.2],
+                ["s", f < -0.2],
+                ["d", r > 0.2],
+                ["a", r < -0.2],
+              ])
+                window.dispatchEvent(
+                  new KeyboardEvent(on ? "keydown" : "keyup", {
+                    key,
+                    bubbles: true,
+                  }),
+                );
+            }
             requestAnimationFrame(play);
           }
           requestAnimationFrame(play);

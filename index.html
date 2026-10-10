@@ -17,6 +17,7 @@
         <span id="connection" class="badge">JEV · CONNECTING</span
         ><button id="quality">QUALITY HIGH</button
         ><button id="sound">SOUND OFF</button
+        ><button id="insights">JEV DETAILS</button
         ><button id="help">CONTROLS</button>
       </div>
     </header>
@@ -78,13 +79,15 @@
     <div id="intro" class="panel">
       <div class="eyebrow">A DUEL OF INTENT</div>
       <h1>IRON<br /><em>VOW</em></h1>
-      <p>
-        Steel has three directions.<br />Survival has one rule: read your enemy.
-      </p>
+      <p>Attack. Dodge. Counter.<br />A duel against a live JEV opponent.</p>
       <div class="mode-select">
         <button data-mode="human" class="selected">PLAY vs JEV</button>
         <button data-mode="ai">JEV vs JEV</button>
       </div>
+      <label id="human-settings"
+        ><input id="manual-directions" type="checkbox" /> MANUAL DIRECTIONS
+        <small>Optional · mouse and arrow guard</small></label
+      >
       <div id="blue-select" class="hidden">
         <label for="player-persona">BLUE FIGHTER</label>
         <select id="player-persona">
@@ -126,16 +129,15 @@
         <button id="close-help">CLOSE ✕</button>
         <h2>Read. React. Riposte.</h2>
         <p>
-          Match your guard to the incoming red direction to block. Change
-          direction to find an opening.
+          Click to cut. Dodge a committed swing or press Shift just before
+          contact to parry. Attack during the opening. Enable Manual Directions
+          for full directional guard control.
         </p>
         <dl>
           <dt>W A S D</dt>
           <dd>Move / circle enemy</dd>
           <dt>← ↑ → or Q E R</dt>
-          <dd>
-            Left / top / right guard and attack direction (or move the mouse)
-          </dd>
+          <dd>Manual mode: left / top / right guard and attack direction</dd>
           <dt>Left click / J</dt>
           <dd>Light attack</dd>
           <dt>Right click / K</dt>
@@ -147,7 +149,9 @@
           <dt>SPACE</dt>
           <dd>Dodge in your movement direction</dd>
           <dt>SHIFT</dt>
-          <dd>Committed parry (match direction just before impact)</dd>
+          <dd>
+            Timed parry · direction matches the incoming strike in assisted mode
+          </dd>
           <dt>ESC</dt>
           <dd>Pause / resume</dd>
         </dl>
@@ -160,10 +164,10 @@
       </div>
     </div>
     <footer id="controls" class="hidden">
-      <span><b>WASD</b> MOVE</span><span><b>MOUSE / ARROWS</b> GUARD</span
+      <span><b>WASD</b> MOVE</span><span><b>SHIFT</b> TIMED PARRY</span
       ><span><b>LMB / RMB</b> LIGHT / HEAVY</span><span><b>SPACE</b> DODGE</span
       ><span><b>G</b> BREAK</span><span><b>F</b> FEINT</span
-      ><span><b>SHIFT</b> PARRY</span>
+      ><span><b>ARROWS</b> OPTIONAL DIRECTION</span>
     </footer>
     <div id="paused" class="modal hidden">
       <div>

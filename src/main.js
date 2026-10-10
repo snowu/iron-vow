@@ -37,7 +37,7 @@ import {
 } from "./brain.js";
 const $ = (id) => document.getElementById(id),
   canvas = $("arena");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = false;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -45,12 +45,12 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#17272e");
-scene.fog = new THREE.FogExp2("#17272e", 0.027);
+scene.background = new THREE.Color("#0c1420");
+scene.fog = new THREE.FogExp2("#0c1420", 0.04);
 const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 120);
 camera.position.set(10, 7, 12);
-scene.add(new THREE.HemisphereLight("#a4d1de", "#302d27", 2.1));
-const sun = new THREE.DirectionalLight("#ffdbaf", 3);
+scene.add(new THREE.HemisphereLight("#b8dceb", "#1b2239", 1.55));
+const sun = new THREE.DirectionalLight("#e3f2ff", 2.1);
 sun.position.set(-6, 12, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -61,19 +61,19 @@ sun.shadow.camera.bottom = -15;
 sun.shadow.bias = -0.0003;
 scene.add(sun);
 const mats = {
-  stone: new THREE.MeshLambertMaterial({ color: "#455358" }),
-  edge: new THREE.MeshLambertMaterial({ color: "#2a3b43" }),
+  stone: new THREE.MeshLambertMaterial({ color: "#263747" }),
+  edge: new THREE.MeshLambertMaterial({ color: "#131e2b" }),
   metal: new THREE.MeshLambertMaterial({
-    color: "#9daeb3",
+    color: "#35495d",
   }),
   dark: new THREE.MeshLambertMaterial({
-    color: "#1f2c32",
+    color: "#111b2b",
   }),
   gold: new THREE.MeshLambertMaterial({
-    color: "#a68a55",
+    color: "#94b7c7",
   }),
-  player: new THREE.MeshLambertMaterial({ color: "#527e8a" }),
-  enemy: new THREE.MeshLambertMaterial({ color: "#9a4b39" }),
+  player: new THREE.MeshLambertMaterial({ color: "#23aabb" }),
+  enemy: new THREE.MeshLambertMaterial({ color: "#e46453" }),
   skin: new THREE.MeshLambertMaterial({ color: "#a9967a" }),
 };
 function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene) {
@@ -87,99 +87,41 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent = scene) {
 function box(w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) {
   return mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z, parent);
 }
-mesh(new THREE.CylinderGeometry(9, 9.5, 0.8, 64), mats.edge, 0, -0.45, 0);
-mesh(new THREE.CylinderGeometry(8.9, 8.9, 0.12, 64), mats.stone, 0, -0.02, 0);
-// Stone joints and inlaid circular dueling lines.
-for (let r of [3.3, 6.1, 8.5]) {
-  const ring = mesh(
-    new THREE.TorusGeometry(r, 0.025, 4, 100),
-    mats.gold,
-    0,
-    0.05,
-    0,
-  );
-  ring.rotation.x = Math.PI / 2;
-}
-for (let i = 0; i < 36; i++) {
-  const a = (i * Math.PI * 2) / 36;
-  const b = box(
-    0.026,
-    0.008,
-    8.8,
-    mats.edge,
-    Math.sin(a) * 4.4,
-    0.05,
-    Math.cos(a) * 4.4,
-  );
-  b.rotation.y = a;
-}
-const ground = mesh(
-  new THREE.PlaneGeometry(300, 300),
-  new THREE.MeshLambertMaterial({ color: "#1a282d" }),
+// A quiet training ring: the silhouettes and weapon paths carry the scene.
+mesh(new THREE.CylinderGeometry(9, 9.2, 0.5, 48), mats.edge, 0, -0.3, 0);
+mesh(new THREE.CylinderGeometry(8.9, 8.9, 0.1, 48), mats.stone, 0, -0.03, 0);
+const boundary = mesh(
+  new THREE.TorusGeometry(8.3, 0.035, 4, 80),
+  new THREE.MeshBasicMaterial({ color: "#5d7d85" }),
   0,
-  -1,
+  0.04,
   0,
 );
+boundary.rotation.x = Math.PI / 2;
+const ground = mesh(new THREE.PlaneGeometry(300, 300), mats.edge, 0, -0.6, 0);
 ground.rotation.x = -Math.PI / 2;
 const flames = [];
 for (let i = 0; i < 12; i++) {
-  const a = (i * Math.PI * 2) / 12,
-    x = Math.sin(a) * 10.3,
-    z = Math.cos(a) * 10.3;
-  box(1.15, 0.45, 1.15, mats.edge, x, -0.65, z);
-  const pillar = mesh(
-    new THREE.CylinderGeometry(0.4, 0.6, 4.3, 8),
-    mats.stone,
-    x,
-    1.35,
-    z,
-  );
-  box(1.1, 0.28, 1.1, mats.edge, x, 3.6, z);
-  if (i % 3 === 0) {
-    mesh(
-      new THREE.CylinderGeometry(0.25, 0.13, 0.45, 8),
-      mats.gold,
-      x,
-      3.94,
-      z,
-    );
-    const flame = mesh(
-      new THREE.ConeGeometry(0.17, 0.6, 7),
-      new THREE.MeshBasicMaterial({ color: "#ffa253" }),
-      x,
-      4.32,
-      z,
-    );
-    flames.push(flame);
-    const light = new THREE.PointLight("#ff9b50", 12, 10);
-    light.position.set(x, 4.2, z);
-    scene.add(light);
-  } else {
-    const banner = box(
-      0.8,
-      2,
-      0.035,
-      i % 2 ? mats.player : mats.enemy,
-      x,
-      2.2,
-      z,
-    );
-    banner.rotation.y = a;
-  }
-}
-for (let i = 0; i < 16; i++) {
-  const a = (i * Math.PI * 2) / 16,
-    r = 18 + (i % 3) * 3;
-  const tower = box(
-    3,
-    5 + (i % 5),
-    3,
+  const angle = (i * Math.PI) / 6;
+  const pillar = box(
+    0.35,
+    1.7,
+    0.35,
     mats.edge,
-    Math.sin(a) * r,
-    (5 + (i % 5)) / 2 - 1,
-    Math.cos(a) * r,
+    Math.sin(angle) * 10.3,
+    0.4,
+    Math.cos(angle) * 10.3,
   );
-  tower.rotation.y = a;
+  pillar.rotation.y = angle;
+  box(
+    0.08,
+    0.9,
+    0.08,
+    new THREE.MeshBasicMaterial({ color: i % 2 ? "#ef7966" : "#51c8d1" }),
+    Math.sin(angle) * 10.05,
+    0.8,
+    Math.cos(angle) * 10.05,
+  );
 }
 scene.updateMatrixWorld(true);
 const staticByMaterial = new Map();
@@ -202,19 +144,6 @@ for (const batch of staticByMaterial.values()) {
   if (geometry) mesh(geometry, batch.material);
   for (const g of batch.geometries) g.dispose();
 }
-const motes = Array.from({ length: 70 }, () => ({
-  x: (Math.random() - 0.5) * 22,
-  y: Math.random() * 7,
-  z: (Math.random() - 0.5) * 22,
-}));
-const moteMesh = new THREE.InstancedMesh(
-  new THREE.SphereGeometry(0.018, 4, 3),
-  new THREE.MeshBasicMaterial({ color: "#d4ad78" }),
-  motes.length,
-);
-scene.add(moteMesh);
-const moteMatrix = new THREE.Matrix4();
-
 function batchBone(bone) {
   const batches = new Map();
   for (const child of [...bone.children]) {
@@ -247,35 +176,58 @@ function knight(color) {
   const body = new THREE.Group();
   root.add(body);
   const cloth = mats[color].clone();
-  box(0.62, 0.74, 0.38, cloth, 0, 1.29, 0, body);
-  mesh(new THREE.CylinderGeometry(0.4, 0.28, 0.45, 8), cloth, 0, 0.8, 0, body);
-  box(0.59, 0.38, 0.4, mats.metal, 0, 1.46, 0.03, body);
-  box(0.13, 0.4, 0.03, mats.gold, 0, 1.45, 0.245, body);
-  box(0.62, 0.1, 0.4, mats.dark, 0, 1.03, 0, body);
+  mesh(new THREE.CylinderGeometry(0.3, 0.23, 0.65, 4), cloth, 0, 1.34, 0, body);
+  mesh(
+    new THREE.CylinderGeometry(0.25, 0.22, 0.25, 6),
+    cloth,
+    0,
+    0.96,
+    0,
+    body,
+  );
+  box(0.38, 0.3, 0.33, mats.metal, 0, 1.49, 0.045, body);
+  box(0.035, 0.25, 0.025, mats.gold, 0, 1.48, 0.222, body);
+  box(0.49, 0.08, 0.35, mats.dark, 0, 1.03, 0, body);
   const helm = mesh(
-    new THREE.SphereGeometry(0.245, 12, 10),
+    new THREE.IcosahedronGeometry(0.21, 0),
     mats.metal,
     0,
     1.97,
     0,
     body,
   );
-  helm.scale.y = 1.15;
-  const visor = box(0.36, 0.08, 0.09, mats.dark, 0, 1.97, 0.215, body);
-  box(0.035, 0.38, 0.025, mats.gold, 0, 2, 0.255, body);
+  helm.scale.set(0.88, 1.2, 0.95);
+  const visor = box(
+    0.27,
+    0.045,
+    0.055,
+    new THREE.MeshBasicMaterial({
+      color: color === "player" ? "#90f4f8" : "#ffd0ac",
+    }),
+    0,
+    1.98,
+    0.2,
+    body,
+  );
+
   const legs = [];
   for (const side of [-1, 1]) {
     const leg = new THREE.Group();
-    leg.position.set(side * 0.2, 0.82, 0);
+    leg.position.set(side * 0.17, 0.9, 0);
     body.add(leg);
-    box(0.23, 0.55, 0.25, mats.dark, 0, -0.28, 0, leg);
-    box(0.23, 0.26, 0.29, mats.metal, 0, -0.51, 0.03, leg);
-    box(0.25, 0.15, 0.43, mats.dark, 0, -0.75, 0.08, leg);
+    box(0.16, 0.36, 0.18, mats.dark, 0, -0.18, 0, leg);
+    const knee = new THREE.Group();
+    knee.position.y = -0.36;
+    leg.add(knee);
+    box(0.15, 0.38, 0.18, mats.metal, 0, -0.19, 0, knee);
+    box(0.19, 0.12, 0.33, mats.dark, 0, -0.42, 0.08, knee);
+    leg.userData.knee = knee;
+
     legs.push(leg);
     mesh(
-      new THREE.SphereGeometry(0.23, 8, 6),
+      new THREE.IcosahedronGeometry(0.16, 0),
       mats.metal,
-      side * 0.45,
+      side * 0.34,
       1.65,
       0,
       body,
@@ -284,24 +236,27 @@ function knight(color) {
   const arms = [];
   for (const side of [-1, 1]) {
     const arm = new THREE.Group();
-    arm.position.set(side * 0.44, 1.61, 0);
+    arm.position.set(side * 0.32, 1.61, 0);
     body.add(arm);
-    box(0.18, 0.47, 0.2, cloth, 0, -0.22, 0, arm);
-    box(0.2, 0.26, 0.21, mats.metal, 0, -0.46, 0, arm);
-    mesh(new THREE.SphereGeometry(0.12, 8, 6), mats.dark, 0, -0.61, 0, arm);
+    box(0.13, 0.29, 0.15, cloth, 0, -0.145, 0, arm);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.29;
+    arm.add(elbow);
+    box(0.14, 0.25, 0.17, mats.metal, 0, -0.125, 0, elbow);
+    box(0.13, 0.13, 0.13, mats.dark, 0, -0.3, 0, elbow);
+    arm.userData.elbow = elbow;
     arms.push(arm);
   }
   const sword = new THREE.Group();
-  arms[1].add(sword);
-  sword.position.set(0, -0.59, 0);
+  arms[1].userData.elbow.add(sword);
+  sword.position.set(0, -0.3, 0);
   sword.rotation.x = Math.PI;
   box(0.075, 0.28, 0.08, mats.dark, 0, 0.04, 0, sword);
   box(0.42, 0.06, 0.09, mats.gold, 0, 0.22, 0, sword);
   const bladeMaterial = mats.metal.clone();
-  box(0.1, 1.03, 0.035, bladeMaterial, 0, 0.77, 0, sword);
-  mesh(new THREE.ConeGeometry(0.075, 0.24, 4), mats.metal, 0, 1.4, 0, sword);
-  const cape = box(0.57, 0.95, 0.05, cloth, 0, 1.05, -0.28, body);
-  cape.rotation.x = 0.18;
+  box(0.075, 1.15, 0.025, bladeMaterial, 0, 0.82, 0, sword);
+  mesh(new THREE.ConeGeometry(0.055, 0.22, 4), bladeMaterial, 0, 1.4, 0, sword);
+  box(0.4, 0.28, 0.035, cloth, 0, 0.96, -0.23, body);
   const ring = mesh(
     new THREE.TorusGeometry(0.66, 0.025, 5, 40),
     new THREE.MeshBasicMaterial({
@@ -315,7 +270,29 @@ function knight(color) {
     root,
   );
   ring.rotation.x = Math.PI / 2;
-  [body, ...arms, ...legs, sword].forEach(batchBone);
+  const shadow = mesh(
+    new THREE.CircleGeometry(0.65, 24),
+    new THREE.MeshBasicMaterial({
+      color: "#060c13",
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    }),
+    0,
+    0.065,
+    0,
+    root,
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.scale.set(1, 0.75, 1);
+  [
+    body,
+    ...arms,
+    ...legs,
+    ...arms.map((a) => a.userData.elbow),
+    ...legs.map((l) => l.userData.knee),
+    sword,
+  ].forEach(batchBone);
   const trailGeometry = new THREE.BufferGeometry();
   trailGeometry.setAttribute(
     "position",
@@ -420,8 +397,10 @@ function burst(f, color) {
     });
   }
 }
+let manualOverride = null;
 function setGuard(dir) {
   if (battleMode === "ai") return;
+  manualOverride = dir;
   switchGuard(player, dir);
 }
 function attack(type) {
@@ -429,6 +408,14 @@ function attack(type) {
   if (type === "guardbreak" && counterBreak(player, enemy)) {
     announce("COUNTER BREAK", 0.65);
     return;
+  }
+  if (!$("manual-directions").checked && type !== "guardbreak") {
+    switchGuard(
+      player,
+      manualOverride ||
+        (type === "heavy" ? "top" : player.attackSerial % 2 ? "right" : "left"),
+    );
+    manualOverride = null;
   }
   const accepted = requestAttack(player, type);
   if (accepted === "rejected" && player.stamina < (specs[type]?.cost || 0)) {
@@ -453,11 +440,9 @@ function playerDodge() {
   }
 }
 function movementVector() {
-  const forward = new THREE.Vector3(
-    enemy.x - player.x,
-    0,
-    enemy.z - player.z,
-  ).normalize();
+  const forward = camera.getWorldDirection(new THREE.Vector3());
+  forward.y = 0;
+  forward.normalize();
   const right = new THREE.Vector3(-forward.z, 0, forward.x);
   return forward
     .multiplyScalar((keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0))
@@ -488,7 +473,11 @@ window.addEventListener("keydown", (e) => {
     history = history.slice(-8);
   }
   if (e.code === "Space") playerDodge();
-  if (k === "shift" && mode === "play") requestDefense(player, "parry");
+  if (k === "shift" && mode === "play") {
+    if (!$("manual-directions").checked && specs[enemy.action])
+      switchGuard(player, enemy.attackDir);
+    requestDefense(player, "parry");
+  }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur", () => {
@@ -506,7 +495,13 @@ canvas.addEventListener("pointerdown", (e) => {
 let guardMouseX = 0,
   guardMouseY = 0;
 window.addEventListener("pointermove", (event) => {
-  if (mode !== "play" || paused || battleMode === "ai") return;
+  if (
+    mode !== "play" ||
+    paused ||
+    battleMode === "ai" ||
+    !$("manual-directions").checked
+  )
+    return;
   guardMouseX += event.movementX;
   guardMouseY += event.movementY;
   if (Math.hypot(guardMouseX, guardMouseY) > 28) {
@@ -542,6 +537,9 @@ $("sound").onclick = () => {
   $("sound").textContent = soundOn ? "SOUND ON" : "SOUND OFF";
   tone(300);
 };
+$("insights").onclick = () => {
+  document.body.classList.toggle("show-insights");
+};
 $("help").onclick = () => {
   $("instructions").classList.remove("hidden");
   if (mode === "play") paused = true;
@@ -558,6 +556,7 @@ function resetRound() {
   playerController.cooldown = 0.8;
   brains = { enemy: createBrain(), player: createBrain() };
   keys.clear();
+  manualOverride = null;
   hitstop = 0;
   accumulator = 0;
   player = fighter(0, 2);
@@ -599,7 +598,10 @@ function resetRound() {
     battleMode === "ai"
       ? `RED · ${persona.toUpperCase()}`
       : `THE ${persona.toUpperCase()}`;
-  $("guard").classList.toggle("hidden", battleMode === "ai");
+  $("guard").classList.toggle(
+    "hidden",
+    battleMode === "ai" || !$("manual-directions").checked,
+  );
   $("controls").classList.toggle("hidden", battleMode === "ai");
   $("brain-player").classList.toggle("hidden", battleMode !== "ai");
   $("spectator-hint").classList.toggle("hidden", battleMode !== "ai");
@@ -845,13 +847,29 @@ function animateKnight(v, f, other, dt) {
   v.root.position.set(f.x, 0, f.z);
   v.root.rotation.y = yawToTarget(f, other);
   const moving = f.moving || f.dodge > 0;
-  const stride = moving ? Math.sin(clock * 10) * 0.4 : 0;
+  const travelled = Math.hypot(
+    f.x - (v.previousX ?? f.x),
+    f.z - (v.previousZ ?? f.z),
+  );
+  v.previousX = f.x;
+  v.previousZ = f.z;
+  v.gait = (v.gait || 0) + travelled * 7;
+  const stride = moving ? Math.sin(v.gait) * 0.35 : 0;
   v.legs[0].rotation.x = stride;
   v.legs[1].rotation.x = -stride;
-  v.body.position.y =
-    Math.sin(clock * (moving ? 10 : 2)) * (moving ? 0.035 : 0.014);
-  v.body.rotation.x = f.dodge > 0 ? 0.3 : 0;
-  const pose = swordPose(f);
+  v.legs[0].userData.knee.rotation.x = Math.max(0, stride) * 1.2 + 0.12;
+  v.legs[1].userData.knee.rotation.x = Math.max(0, -stride) * 1.2 + 0.12;
+  v.arms[1].userData.elbow.rotation.x = 0.15;
+  v.arms[0].userData.elbow.rotation.x = 0.65;
+  v.body.position.y = moving ? Math.abs(stride) * 0.045 : 0;
+  v.body.rotation.x = THREE.MathUtils.damp(
+    v.body.rotation.x,
+    f.stun > 0 ? -0.35 : f.dodge > 0 ? 0.45 : specs[f.action] ? 0.08 : 0,
+    25,
+    dt,
+  );
+  let pose = swordPose(f);
+  if (f.blockFlash > 0 || f.parryFlash > 0) pose = [-1.65, 0.2, 0];
   if (v.serial !== f.attackSerial) {
     v.serial = f.attackSerial;
     v.startPose = [
@@ -878,7 +896,7 @@ function animateKnight(v, f, other, dt) {
         blend,
       )),
   );
-  const cut = specs[f.action] && f.elapsed / f.wind > 0.32;
+  const cut = specs[f.action] && f.elapsed > f.wind - 0.085;
   v.bladeMaterial.emissive.set(
     cut ? (v === pVisual ? "#3baabf" : "#ea673d") : "#000000",
   );
@@ -914,7 +932,7 @@ function animateKnight(v, f, other, dt) {
       : THREE.MathUtils.damp(v.body.rotation.y, 0, 30, dt);
   v.arms[0].rotation.x = -0.7;
   v.arms[0].rotation.z = -0.15;
-  v.root.rotation.z = f.stun > 0 ? Math.sin(clock * 25) * 0.04 : 0;
+  v.root.rotation.z = 0;
   if (f.hp <= 0) {
     v.body.rotation.z = THREE.MathUtils.damp(v.body.rotation.z, 1.3, 4, dt);
     v.body.position.y = -0.4;
@@ -990,22 +1008,19 @@ function frame(now) {
     animateKnight(eVisual, enemy, player, dt);
   }
   if (mode === "intro") {
-    desiredCamera.set(9, 5.5, 11);
+    desiredCamera.set(8, 5, 7);
     look.set(-0.5, 1, 0);
   } else {
-    const offset = new THREE.Vector3(
-      player.x - enemy.x,
-      0,
-      player.z - enemy.z,
-    ).normalize();
+    const distance = Math.hypot(player.x - enemy.x, player.z - enemy.z);
+    const zoom = Math.max(1, Math.min(1.65, distance / 5));
     desiredCamera.set(
-      (player.x + enemy.x) / 2 + offset.x * 2.8 + offset.z * 7.5,
-      5.3,
-      (player.z + enemy.z) / 2 + offset.z * 2.8 - offset.x * 7.5,
+      (player.x + enemy.x) / 2 + 8 * zoom,
+      5.8 * zoom,
+      (player.z + enemy.z) / 2 + 4.2 * zoom,
     );
     look.set((player.x + enemy.x) / 2, 1, (player.z + enemy.z) / 2);
   }
-  camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 12));
+  camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 7));
   if (cameraShake > 0) {
     cameraShake -= dt;
     camera.position.x += (Math.random() - 0.5) * cameraShake;
@@ -1090,18 +1105,6 @@ function frame(now) {
     noticeTimer -= dt;
     if (noticeTimer <= 0) $("notice").textContent = "";
   }
-  for (const flame of flames) {
-    flame.scale.y = 1 + Math.sin(clock * 14 + flame.position.x) * 0.14;
-    flame.rotation.y = clock * 2;
-  }
-  for (let i = 0; i < motes.length; i++) {
-    const mote = motes[i];
-    mote.y += dt * 0.11;
-    if (mote.y > 7) mote.y = 0;
-    moteMatrix.makeTranslation(mote.x, mote.y, mote.z);
-    moteMesh.setMatrixAt(i, moteMatrix);
-  }
-  moteMesh.instanceMatrix.needsUpdate = true;
   particles = particles.filter((p) => {
     p.life -= dt;
     p.mesh.position.addScaledVector(p.v, dt);
@@ -1168,6 +1171,10 @@ window.__IRON_VOW__ = {
       lastReaction: enemyController.lastReaction,
       decisionUsed: enemyController.decisionUsed,
     },
+    cameraForward: (() => {
+      const f = camera.getWorldDirection(new THREE.Vector3());
+      return { x: f.x, z: f.z };
+    })(),
     facing: {
       player: visualFacing(pVisual, player, enemy),
       enemy: visualFacing(eVisual, enemy, player),

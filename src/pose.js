@@ -5,7 +5,7 @@ const guards = {
   right: [-0.7, 0.9, 0.5],
 };
 const ends = {
-  top: [-0.15, 0.1, 0],
+  top: [-1.3, 0.1, 0],
   left: [-1, 1.15, 0.65],
   right: [-1, -1.15, -0.65],
 };
@@ -22,9 +22,10 @@ export function swordPose(f) {
     const start = guards[dir],
       end = ends[dir];
     const coil = [start[0] - 0.25, start[1] * 1.15, start[2] * 1.15];
-    return t < 0.32
-      ? mix(start, coil, smooth(t / 0.32))
-      : mix(coil, end, smooth((t - 0.32) / 0.68));
+    const release = 1 - 0.085 / f.wind;
+    return t < release
+      ? mix(start, coil, smooth(f.elapsed / 0.035))
+      : mix(coil, end, smooth((t - release) / (1 - release)));
   }
   if (f.action === "guardbreak")
     return mix(guard, [-1.4, 0, 0], smooth(f.elapsed / f.wind));

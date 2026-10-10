@@ -46,14 +46,16 @@ test("early directional followup is queued once and chains", () => {
   assert.equal(f.action, "idle");
   assert.equal(f.attackSerial, 2);
 });
-test("defensive cancels open after committed impact", () => {
+test("defense cancels anticipation but committed swings must finish", () => {
   for (const defense of [dodge, parry]) {
-    const f = fighter(0, 0);
+    let f = fighter(0, 0);
     begin(f, "light");
+    assert.equal(defense(f), true);
+    f = fighter(0, 0);
+    begin(f, "light");
+    run(f, 0.1);
     assert.equal(defense(f), false);
-    run(f, 0.21);
-    assert.equal(defense(f), false);
-    run(f, 0.06);
+    run(f, 0.17);
     assert.equal(defense(f), true);
   }
 });
@@ -126,9 +128,9 @@ test("range and stamina constrain attacks and stamina recovers", () => {
 test("defense requested during windup survives until recovery cancel", () => {
   const f = fighter(0, 0);
   begin(f, "heavy");
-  run(f, 0.05);
+  run(f, 0.18);
   assert.equal(requestDefense(f, "dodge"), "buffered");
-  run(f, 0.4);
+  run(f, 0.27);
   assert.equal(f.action, "dodge");
   assert.equal(f.buffer, null);
 });

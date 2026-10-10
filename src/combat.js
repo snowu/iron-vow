@@ -62,6 +62,8 @@ export function fighter(x, z) {
     pushZ: 0,
     pushTime: 0,
     hitFlash: 0,
+    blockFlash: 0,
+    parryFlash: 0,
   };
 }
 export function switchGuard(f, dir) {
@@ -167,9 +169,17 @@ export function feint(f) {
   f.lastOutcome = "feint";
   return true;
 }
+function canDefend(f) {
+  return (
+    f.action === "idle" ||
+    (f.action === "recover" && f.elapsed >= 0.05) ||
+    (["light", "heavy"].includes(f.action) &&
+      f.elapsed <= Math.min(0.12, f.wind * 0.35))
+  );
+}
 export function dodge(f) {
   if (
-    (f.action !== "idle" && !(f.action === "recover" && f.elapsed >= 0.05)) ||
+    !canDefend(f) ||
     f.stun > 0 ||
     f.grabbed > 0 ||
     f.stamina < 12 ||
@@ -177,6 +187,8 @@ export function dodge(f) {
   )
     return false;
   f.stamina -= 12;
+  f.buffer = null;
+  f.chainAllowed = false;
   f.action = "dodge";
   f.timer = 0.32;
   f.elapsed = 0;
@@ -187,7 +199,7 @@ export function dodge(f) {
 }
 export function parry(f) {
   if (
-    (f.action !== "idle" && !(f.action === "recover" && f.elapsed >= 0.05)) ||
+    !canDefend(f) ||
     f.stun > 0 ||
     f.grabbed > 0 ||
     f.parryCooldown > 0 ||
@@ -195,6 +207,8 @@ export function parry(f) {
     f.hp <= 0
   )
     return false;
+  f.buffer = null;
+  f.chainAllowed = false;
   f.action = "parry";
   f.timer = 0.24;
   f.elapsed = 0;
@@ -236,6 +250,8 @@ export function tick(f, dt) {
     "counterReady",
     "regenDelay",
     "hitFlash",
+    "blockFlash",
+    "parryFlash",
   ])
     f[key] = Math.max(0, f[key] - dt);
   if (f.stamina <= 0) f.exhausted = true;
@@ -364,6 +380,7 @@ export function resolve(a, b, strike) {
     b.parry = 0;
     b.stamina = Math.min(100, b.stamina + 10);
     b.parries++;
+    b.parryFlash = 0.18;
     a.lastOutcome = "parry";
     return "parry";
   }
@@ -377,6 +394,7 @@ export function resolve(a, b, strike) {
     b.stamina = Math.max(0, b.stamina - (strike.type === "heavy" ? 15 : 8));
     b.regenDelay = 0.45;
     b.blocks++;
+    b.blockFlash = 0.12;
     if (strike.type === "heavy") b.hp = Math.max(0, b.hp - 2);
     else {
       a.timer = Math.min(a.timer, 0.1);

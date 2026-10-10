@@ -12,7 +12,7 @@ npm run play
 
 Open http://localhost:4318 and select **Enter the Ring**. Node loads the existing `/home/snow/.config/typesafe/env` through `--env-file`. The key is never read by the frontend or included in assets. Requires Node 22+.
 
-Controls: WASD moves relative to your locked opponent. Arrow left/up/right (or Q/E/R) selects guard and attack direction. J / left click performs a light attack; K / right click a heavy. Space dodges in your movement direction (invulnerability only in the middle of the dodge), G breaks guard or counters a timed incoming grab, F cancels heavy windup before commitment, Shift commits to a parry with startup and punishable recovery. Inputs during windup and recovery buffer into four-hit chains. Mouse movement also selects guard. Guard switching takes 25 ms. Escape pauses. Match the red incoming direction to block. Use the Controls button for the complete guide.
+Controls: WASD moves relative to the camera. J / left click attacks light (alternating sides); K / right click attacks heavy (overhead). Space dodges in your movement direction, or backward when stationary. Shift attempts a timed parry matching the visible incoming direction. G breaks guard or counters an incoming grab; F feints a heavy before commitment. Dodge and parry cancel the first 120 ms of anticipation; once the swing commits, defense queues for recovery. Attacks buffer into four-hit chains. Enable **Manual Directions** for mouse and arrow guard control; arrow keys also override the next assisted attack. Escape pauses. JEV Details expands the decision panels.
 
 ## Combat and AI
 
@@ -71,3 +71,7 @@ Escape pauses. Combat inputs are disabled while spectating. **Keep Dueling** adv
 ```sh
 GAME_URL=https://snowu.github.io/iron-vow/ node tests/ai-browser.mjs
 ```
+
+## Combat presentation rebuild
+
+The current prototype uses a fixed diagonal camera, camera-relative movement, slimmer jointed fighters, distance-driven footsteps, and a quieter training arena. Sword swings hold their anticipation and cut during the last 85 ms before contact. Early defensive cancels and assisted attack directions reduce the inputs needed to play; manual direction control remains optional. Both live JEV modes use the same combat rules. These changes need player feedback on feel; automated checks establish functionality, not fun.

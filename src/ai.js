@@ -200,8 +200,9 @@ export function stepAI(c, self, foe, decision, dt) {
       vz += toward.z * 0.5;
     }
   }
-  self.x += vx * dt * 3.3;
-  self.z += vz * dt * 3.3;
+  const speed = movement === "advance" && distance > 3 ? 5.2 : 3.6;
+  self.x += vx * dt * speed;
+  self.z += vz * dt * speed;
   self.moving = Math.hypot(vx, vz) > 0.1;
   // Never continuously read the player's guard/attack direction. Only the delayed
   // reaction above uses an observed telegraph; idle anticipation comes from JEV.
