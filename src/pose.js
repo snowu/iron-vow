@@ -17,6 +17,18 @@ const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 export function swordPose(f) {
   const guard = guards[f.guard] || guards.top;
   const dir = f.attackDir || f.guard;
+  if (f.blockFlash > 0 || f.parryFlash > 0 || f.action === "parry") {
+    const defense = f.action === "parry" ? f.guard : f.defenseDir || f.guard;
+    return defense === "top"
+      ? [-1.3, 0.12, 0, -1.15, 0.35]
+      : [
+          -1.0,
+          defense === "left" ? -0.35 : 0.4,
+          defense === "left" ? -0.6 : 0.6,
+          -1.1,
+          0.2,
+        ];
+  }
   if (["light", "heavy"].includes(f.action)) {
     const t = f.elapsed / f.wind;
     const start = guards[dir],
@@ -39,13 +51,5 @@ export function swordPose(f) {
     const end = f.lastType === "guardbreak" ? [-0.9, 0, 0, -0.3, 0] : ends[dir];
     return mix(end, guard, smooth((f.elapsed - 0.035) / 0.14));
   }
-  if (f.action === "parry")
-    return [
-      -1.1,
-      dir === "left" ? -0.25 : dir === "right" ? 0.25 : 0,
-      0,
-      -1.1,
-      0.2,
-    ];
   return guard;
 }

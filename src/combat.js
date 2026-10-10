@@ -381,6 +381,7 @@ export function resolve(a, b, strike) {
     b.stamina = Math.min(100, b.stamina + 10);
     b.parries++;
     b.parryFlash = 0.18;
+    b.defenseDir = strike.dir;
     a.lastOutcome = "parry";
     return "parry";
   }
@@ -395,6 +396,7 @@ export function resolve(a, b, strike) {
     b.regenDelay = 0.45;
     b.blocks++;
     b.blockFlash = 0.12;
+    b.defenseDir = strike.dir;
     if (strike.type === "heavy") b.hp = Math.max(0, b.hp - 2);
     else {
       a.timer = Math.min(a.timer, 0.1);

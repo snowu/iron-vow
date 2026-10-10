@@ -844,7 +844,14 @@ function impact(a, b, strike, outcome) {
   } else if (outcome === "counter") {
     tone(400);
     announce("COUNTER BREAK", 0.6);
-  } else if (outcome === "evade") announce("EVADED", 0.5);
+  } else if (outcome === "evade") announce("EVADED", 0.35);
+  else if (outcome === "miss" && (a === player || battleMode === "ai"))
+    announce(
+      battleMode === "ai"
+        ? `${a === player ? "BLUE" : "RED"} MISSED`
+        : "MISSED · CLOSE THE GAP",
+      0.3,
+    );
 }
 function animateKnight(v, f, other, dt) {
   v.cloth.emissive.setRGB(f.hitFlash * 3, f.hitFlash * 2, f.hitFlash);
@@ -863,7 +870,7 @@ function animateKnight(v, f, other, dt) {
   v.legs[1].rotation.x = -stride;
   v.legs[0].userData.knee.rotation.x = Math.max(0, stride) * 1.2 + 0.12;
   v.legs[1].userData.knee.rotation.x = Math.max(0, -stride) * 1.2 + 0.12;
-  v.arms[0].userData.elbow.rotation.x = -1.05;
+
   v.body.position.y = moving ? Math.abs(stride) * 0.045 : 0;
   v.body.rotation.x = THREE.MathUtils.damp(
     v.body.rotation.x,
@@ -872,7 +879,7 @@ function animateKnight(v, f, other, dt) {
     dt,
   );
   let pose = swordPose(f);
-  if (f.blockFlash > 0 || f.parryFlash > 0) pose = [-1.1, 0.12, 0, -1.1, 0.2];
+
   if (v.serial !== f.attackSerial) {
     v.serial = f.attackSerial;
     v.startPose = [
@@ -912,6 +919,35 @@ function animateKnight(v, f, other, dt) {
   v.bladeMaterial.emissive.set(
     cut ? (v === pVisual ? "#3baabf" : "#ea673d") : "#000000",
   );
+  v.body.rotation.y =
+    specs[f.action] && f.action !== "guardbreak"
+      ? (f.attackDir === "left" ? -1 : f.attackDir === "right" ? 1 : 0) *
+        (0.16 - 0.32 * Math.min(1, f.elapsed / f.wind))
+      : THREE.MathUtils.damp(v.body.rotation.y, 0, 30, dt);
+  const grabExtension =
+    f.action === "guardbreak"
+      ? Math.sin((Math.min(1, f.elapsed / f.wind) * Math.PI) / 2)
+      : 0;
+  const defending =
+    f.action === "parry" || f.blockFlash > 0 || f.parryFlash > 0;
+  v.arms[0].rotation.x = THREE.MathUtils.damp(
+    v.arms[0].rotation.x,
+    defending ? -0.65 : -0.35 - grabExtension * 0.95 + stride * 0.3,
+    30,
+    dt,
+  );
+  v.arms[0].rotation.z = THREE.MathUtils.damp(
+    v.arms[0].rotation.z,
+    defending ? -0.3 : -0.2,
+    30,
+    dt,
+  );
+  v.arms[0].userData.elbow.rotation.x = THREE.MathUtils.damp(
+    v.arms[0].userData.elbow.rotation.x,
+    -1.05 + grabExtension * 0.8,
+    30,
+    dt,
+  );
   v.root.updateMatrixWorld(true);
   if (cut || (f.action === "recover" && f.elapsed < 0.07 && !f.feinted)) {
     v.trailPoints.unshift([
@@ -937,13 +973,6 @@ function animateKnight(v, f, other, dt) {
   positions.needsUpdate = true;
   v.trail.geometry.setDrawRange(0, count);
   v.trail.visible = count > 0;
-  v.body.rotation.y =
-    specs[f.action] && f.action !== "guardbreak"
-      ? (f.attackDir === "left" ? -1 : f.attackDir === "right" ? 1 : 0) *
-        (0.16 - 0.32 * Math.min(1, f.elapsed / f.wind))
-      : THREE.MathUtils.damp(v.body.rotation.y, 0, 30, dt);
-  v.arms[0].rotation.x = -0.35;
-  v.arms[0].rotation.z = -0.2;
   v.root.rotation.z = 0;
   if (f.hp <= 0) {
     v.body.rotation.z = THREE.MathUtils.damp(v.body.rotation.z, 1.3, 4, dt);
@@ -1112,7 +1141,10 @@ function frame(now) {
                 ? `CHAIN ${player.chain}/4`
                 : player.stamina < 20
                   ? "LOW STAMINA"
-                  : "";
+                  : Math.hypot(player.x - enemy.x, player.z - enemy.z) >
+                      specs.light.reach
+                    ? "CLOSE THE GAP"
+                    : "IN RANGE";
   if (noticeTimer > 0) {
     noticeTimer -= dt;
     if (noticeTimer <= 0) $("notice").textContent = "";

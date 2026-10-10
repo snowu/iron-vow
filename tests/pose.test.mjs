@@ -74,3 +74,19 @@ test("arm poses keep elbows bending forward without sideways shoulder dislocatio
         );
       }
 });
+
+test("parry follows current guard rather than the fighter's previous attack", () => {
+  const parry = (guard, attackDir) =>
+    swordPose({ action: "parry", guard, attackDir });
+  assert.deepEqual(parry("left", "right"), parry("left", "left"));
+  assert.notDeepEqual(parry("left", "right"), parry("right", "right"));
+  assert.deepEqual(
+    swordPose({
+      action: "idle",
+      guard: "top",
+      defenseDir: "left",
+      blockFlash: 0.1,
+    }),
+    parry("left", "top"),
+  );
+});
