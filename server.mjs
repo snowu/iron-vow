@@ -21,7 +21,7 @@ const mime = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
 };
-let active = false,
+let active = 0,
   last = 0;
 const server = http.createServer(async (req, res) => {
   if (req.url === "/api/health") {
@@ -37,12 +37,13 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.url === "/api/decision" && req.method === "POST") {
     res.setHeader("Content-Type", "application/json");
-    if (active || Date.now() - last < 500) {
+    if (active >= 2 || Date.now() - last < 200) {
       res.writeHead(429);
       res.end(JSON.stringify({ error: "Decision already pending" }));
       return;
     }
     let raw = "";
+    let counted = false;
     try {
       for await (const chunk of req) {
         raw += chunk;
@@ -50,7 +51,8 @@ const server = http.createServer(async (req, res) => {
       }
       const state = JSON.parse(raw);
       if (!personas[state.persona]) throw Error("Invalid persona");
-      active = true;
+      active++;
+      counted = true;
       last = Date.now();
       const decision = await ask(
         { ...state, personality: personas[state.persona] },
@@ -61,7 +63,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(503);
       res.end(JSON.stringify({ error: e.message }));
     } finally {
-      active = false;
+      if (counted) active--;
     }
     return;
   }

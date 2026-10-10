@@ -579,12 +579,22 @@ function resetRound() {
   $("score").textContent =
     `${"● ".repeat(pWins)}${"○ ".repeat(2 - pWins)} / ${"● ".repeat(eWins)}${"○ ".repeat(2 - eWins)}`;
   $("enemy-name").textContent = `THE ${persona.toUpperCase()}`;
-  for (const id of ["hud", "guard", "brain", "controls", "combat-read"])
+  for (const id of [
+    "hud",
+    "guard",
+    "brain",
+    "controls",
+    "combat-read",
+    "player-read",
+  ])
     $(id).classList.remove("hidden");
   $("intro").classList.add("hidden");
   $("result").classList.add("hidden");
   $("player-name").textContent =
     battleMode === "ai" ? `BLUE · ${playerPersona.toUpperCase()}` : "YOU";
+  $("player-subtitle").textContent = battleMode === "ai" ? "JEV" : "THE EXILE";
+  $("enemy-brain-caption").textContent =
+    battleMode === "ai" ? "RED FIGHTER · JEV" : "THE OPPONENT'S MIND";
   $("enemy-name").textContent =
     battleMode === "ai"
       ? `RED · ${persona.toUpperCase()}`
@@ -634,7 +644,14 @@ $("menu").onclick = () => {
   $("spectator-hint").classList.add("hidden");
   $("result").classList.add("hidden");
   $("intro").classList.remove("hidden");
-  for (const id of ["hud", "guard", "brain", "controls", "combat-read"])
+  for (const id of [
+    "hud",
+    "guard",
+    "brain",
+    "controls",
+    "combat-read",
+    "player-read",
+  ])
     $(id).classList.add("hidden");
 };
 function finish() {

@@ -23,7 +23,8 @@
     <section id="hud" class="hidden">
       <div class="fighter-hud player">
         <div class="label">
-          <b id="player-name">YOU</b> <span>THE EXILE</span>
+          <b id="player-name">YOU</b>
+          <span id="player-subtitle">THE EXILE</span>
         </div>
         <div class="health"><i id="p-health"></i></div>
         <div class="stamina"><i id="p-stamina"></i></div>
@@ -47,8 +48,8 @@
       <strong id="attack-arrow"></strong>
       <b id="attack-read"></b>
       <div class="attack-meter"><i id="attack-progress"></i><span></span></div>
-      <small id="player-read"></small>
     </div>
+    <small id="player-read" class="hidden"></small>
     <div id="guard" class="hidden">
       <button data-dir="top" class="top">▲</button
       ><button data-dir="left" class="left">◀</button
@@ -56,7 +57,7 @@
       ><span id="guard-label">YOUR GUARD</span>
     </div>
     <aside id="brain" class="hidden">
-      <div class="eyebrow">THE OPPONENT'S MIND</div>
+      <div class="eyebrow" id="enemy-brain-caption">THE OPPONENT'S MIND</div>
       <div class="brain-title">
         <b id="brain-name">JEV</b> <span id="brain-status">Thinking…</span>
       </div>
