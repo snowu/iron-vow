@@ -45,8 +45,55 @@ export function stepFencingPair(controllers, fencers, decisions, dt) {
   );
 }
 const lineMap = { top: "high", left: "inside", right: "outside" };
+function trimMemory(c) {
+  const results = c.history.filter((h) => h.startsWith("result:")).slice(-6);
+  const notes = c.history.filter((h) => !h.startsWith("result:")).slice(-6);
+  c.history = [...results, ...notes];
+}
+// These are observed results, never predictions or attempted defenses.
+export function rememberOutcomes(controllers, events) {
+  for (const e of events) {
+    if (!["touch", "double", "parry", "beat", "miss"].includes(e.type))
+      continue;
+    controllers.forEach((c, side) => {
+      const who = e.side === side ? "self" : "opponent";
+      const detail = `${e.technique || e.action || "attack"} ${e.line || "unknown"} at ${(e.distance || 0).toFixed(1)}m`;
+      const result =
+        e.type === "double"
+          ? "both scored; counterattack did not prevent touch"
+          : e.type === "parry"
+            ? `${who}: successful parry in ${e.line}; ${who === "self" ? "opponent" : "self"} attack stopped`
+            : e.type === "beat"
+              ? `${who}: beat actually displaced blade`
+              : e.type === "miss"
+                ? `${who}: ${detail} fell short or missed; no touch`
+                : `${who}: ${detail} scored`;
+      c.history.push(`result: ${result}`);
+      trimMemory(c);
+    });
+  }
+}
+export function measuredFootwork(c, movement, distance, tactic, dt) {
+  // Half-steps have a plant phase. Full advances stay continuous at long measure.
+  c.stepPhase = ((c.stepPhase || 0) + dt) % 0.32;
+  const pulse = c.stepPhase < 0.19 ? 0.65 : 0;
+  if (movement === "circle_left") return distance > 1.8 ? pulse : 0;
+  if (movement === "circle_right") return distance < 3.4 ? -pulse : 0;
+  if (movement === "retreat") return distance < 4.4 ? -0.8 : 0;
+  if (movement !== "advance") return 0;
+  const measure = ["defend", "feint"].includes(tactic)
+    ? 2.65
+    : tactic === "heavy"
+      ? 2.8
+      : 1.9;
+  return distance > measure + 0.35 ? 1 : distance > measure ? pulse : 0;
+}
 export function stepFencingAI(c, self, foe, decision, dt) {
   c.time += dt;
+  if (c.policy !== decision) {
+    c.policy = decision;
+    c.preparation = null;
+  }
   c.cooldown = Math.max(0, c.cooldown - dt);
   const distance = Math.abs(self.x - foe.x),
     pick = (key) =>
@@ -68,12 +115,12 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.observed = observation;
     if (["thrust", "lunge", "beat", "parry", "retreat"].includes(foe.action)) {
       c.history.push(
-        `opponent: ${foe.technique || foe.action} in ${foe.action === "parry" ? foe.parryLine : foe.attackLine} line`,
+        `opponent: attempted ${foe.technique || foe.action} in ${foe.action === "parry" ? foe.parryLine : foe.attackLine} line`,
       );
     } else if (foe.action === "recover" && foe.feinted) {
       c.history.push("opponent: cancelled preparation as a feint");
     }
-    c.history = c.history.slice(-12);
+    trimMemory(c);
   }
   c.engaged ||= self.serial > 0 || foe.serial > 0;
   // Establish useful measure before inviting an attack. A visible commitment or
@@ -137,7 +184,7 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.followup = pick("after_feint") || "light";
     c.followupUntil = c.time + 1;
     c.history.push(`self: feint in ${c.feintedLine}, preparing ${c.followup}`);
-    c.history = c.history.slice(-12);
+    trimMemory(c);
   }
   if (
     c.compound &&
@@ -192,22 +239,14 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     c.openingSeen !== foe.serial &&
     distance < 3 &&
     decision?.on_opening;
+  c.preparation ||= pick("tactic") || "light";
   const tactic =
     c.initiative ||
     c.followup ||
-    (punish ? pick("on_opening") : pick("tactic")) ||
+    (punish ? pick("on_opening") : c.preparation) ||
     "light";
   let move = decision?.movement || "advance";
-  let footwork =
-    move === "retreat"
-      ? -0.8
-      : move === "advance"
-        ? 1
-        : move === "circle_left"
-          ? 0.5
-          : move === "circle_right"
-            ? -0.5
-            : 0;
+  let footwork = measuredFootwork(c, move, distance, tactic, dt);
   // JEV chooses intention; executable spacing respects the narrow piste.
   if (openingMeasure && footwork < 0) footwork = distance > 2.2 ? 0.35 : 0;
   if (c.initiative)
@@ -223,12 +262,14 @@ export function stepFencingAI(c, self, foe, decision, dt) {
     self.line = lineMap[pick("guard_direction")] || self.line;
     if (punish) c.openingSeen = foe.serial;
     c.cooldown = 0.15;
+    c.preparation = null;
     return footwork;
   }
   if (tactic === "dodge") {
     if (openingMeasure) return footwork;
     command(self, "retreat");
     c.cooldown = 0.4;
+    c.preparation = null;
     return 0;
   }
   const type =
@@ -240,9 +281,10 @@ export function stepFencingAI(c, self, foe, decision, dt) {
   if (distance > (type === "lunge" ? 3.1 : type === "beat" ? 2.3 : 2.0))
     return footwork;
   if (command(self, type)) {
+    c.preparation = null;
     if (c.initiative) {
       c.history.push(`self: took initiative with ${type} after mutual waiting`);
-      c.history = c.history.slice(-12);
+      trimMemory(c);
       c.initiative = null;
       c.quietTime = 0;
     }
@@ -304,6 +346,9 @@ export function fencingState(self, foe, persona, history = []) {
             : "has not parried",
       blockedAttacks: "rarely blocks",
     },
-    habits: history.slice(-6),
+    habits: [
+      ...history.filter((h) => h.startsWith("result:")).slice(-4),
+      ...history.filter((h) => !h.startsWith("result:")).slice(-2),
+    ],
   };
 }

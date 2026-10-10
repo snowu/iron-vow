@@ -110,7 +110,7 @@ export const fencingQuestions = {
   tactic: {
     type: "choice",
     instructions:
-      "Choose an épée fencer's proactive intention on a narrow piste. Use the recent observed actions, lines, results and distance in habits to exploit this opponent: feint against repeated parries, beat a presented blade, draw a committed lunge then punish its recovery. Vary a failed plan instead of repeating straight thrusts. Thrust reaches about 2m, lunge about 3m. Prefer a single touch; counterattacking into an extension risks a double. No passive block, slashes, grabs or right-of-way.",
+      "Choose an épée fencer's proactive intention on a narrow piste. Use the recent observed actions, lines, results and distance in habits to exploit this opponent: feint against repeated parries, beat a presented blade, draw a committed lunge then punish its recovery. Treat attempted parries as intentions only; result notes identify actual stops, misses and scoring lines. Reuse a scoring setup, but change line or preparation when it was stopped. A double is not a successful defensive stop. Vary a failed plan instead of repeating straight thrusts. Thrust reaches about 2m, lunge about 3m. Prefer a single touch; counterattacking into an extension risks a double. No passive block, slashes, grabs or right-of-way.",
     criteria: {
       light: "Quick straight thrust at close distance",
       heavy: "Committed long lunge",
@@ -147,8 +147,8 @@ export const fencingQuestions = {
     criteria: {
       advance: "Advance toward opponent",
       retreat: "Retreat to open distance",
-      circle_left: "Small half-step forward",
-      circle_right: "Small half-step backward",
+      circle_left: "Short advance then plant to reassess",
+      circle_right: "Short retreat then plant to reassess",
       hold: "Hold distance and draw commitment",
     },
   },

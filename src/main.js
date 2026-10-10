@@ -15,6 +15,7 @@ import {
   stepFencingAI,
   stepFencingPair,
   fencingState,
+  rememberOutcomes,
   names,
 } from "./fencing-ai.js";
 import {
@@ -464,10 +465,7 @@ function observedState(side) {
   const f = state.fencers[side],
     foe = state.fencers[1 - side];
   const history = [
-    ...controllers[side].history.slice(-3),
-    ...state.events
-      .slice(-2)
-      .map((e) => `${e.side === side ? "self" : "opponent"}: ${e.type}`),
+    ...controllers[side].history,
     `Distance ${Math.abs(f.x - foe.x).toFixed(1)}m; score self ${state.score[side]} opponent ${state.score[1 - side]}; foe ${foe.action} ${foe.elapsed.toFixed(2)}s; ${controllers[side].engaged ? "engaged" : "opening measure"}`,
   ];
   return fencingState(f, foe, side === 0 ? playerPersona : persona, history);
@@ -550,6 +548,10 @@ function simulate(dt) {
   }
   const previousExchange = state.exchange;
   step(state, dt, movements);
+  rememberOutcomes(
+    controllers,
+    state.events.filter((e) => e.time > lastEvent),
+  );
   if (state.exchange !== previousExchange)
     controllers = [
       fencingController(

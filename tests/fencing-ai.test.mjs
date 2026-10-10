@@ -466,3 +466,77 @@ test("JEV feint intention flows into a different-line thrust instead of endlessl
   assert.equal(c.feintedLine, "inside");
   assert.notEqual(s.fencers[0].attackLine, c.feintedLine);
 });
+
+test("confirmed outcomes survive noisy attempts and preserve perspective across exchanges", async () => {
+  const { rememberOutcomes, fencingState } =
+    await import("../src/fencing-ai.js");
+  const cs = [fencingController("warden"), fencingController("warden")];
+  rememberOutcomes(cs, [
+    { type: "parry", side: 1, line: "inside", distance: 2.1 },
+    { type: "miss", side: 0, action: "lunge", line: "high", distance: 3.2 },
+    {
+      type: "touch",
+      side: 1,
+      action: "thrust",
+      technique: "riposte",
+      line: "outside",
+      distance: 1.9,
+    },
+    { type: "double", side: 0 },
+  ]);
+  const s = bout();
+  for (let i = 1; i <= 20; i++) {
+    s.fencers[1].serial = i;
+    s.fencers[1].action = "parry";
+    stepFencingAI(
+      cs[0],
+      s.fencers[0],
+      s.fencers[1],
+      { tactic: "defend", movement: "hold" },
+      1 / 120,
+    );
+  }
+  const reset = fencingController("warden", cs[0].history);
+  const habits = fencingState(
+    ...s.fencers,
+    "warden",
+    reset.history,
+  ).habits.join("; ");
+  assert.match(
+    habits,
+    /opponent: successful parry in inside; self attack stopped/,
+  );
+  assert.match(habits, /self: lunge high at 3.2m fell short/);
+  assert.match(habits, /opponent: riposte outside at 1.9m scored/);
+  assert.match(habits, /both scored/);
+  assert.match(cs[1].history.join("; "), /self: successful parry/);
+  assert.ok(reset.history.length <= 12);
+});
+
+test("half-steps plant and remeasure, while invitations avoid crowding and endless retreat", async () => {
+  const { measuredFootwork } = await import("../src/fencing-ai.js");
+  const c = fencingController("warden");
+  const moves = Array.from({ length: 40 }, () =>
+    measuredFootwork(c, "circle_left", 2.7, "defend", 1 / 120),
+  );
+  assert.ok(moves.some((m) => m > 0));
+  assert.ok(moves.some((m) => m === 0));
+  assert.equal(measuredFootwork(c, "advance", 2.6, "defend", 1 / 120), 0);
+  assert.equal(measuredFootwork(c, "retreat", 4.5, "defend", 1 / 120), 0);
+  assert.ok(measuredFootwork(c, "advance", 4, "heavy", 1 / 120) > 0);
+});
+
+test("a sampled preparation stays consistent while closing distance", () => {
+  const s = bout(),
+    c = fencingController("warden", [], () => 0.1);
+  c.engaged = true;
+  const policy = {
+    movement: "advance",
+    probabilities: { tactic: { light: 0.5, heavy: 0.5 } },
+  };
+  stepFencingAI(c, ...s.fencers, policy, 1 / 120);
+  assert.equal(c.preparation, "light");
+  c.random = () => 0.9;
+  stepFencingAI(c, ...s.fencers, policy, 1 / 120);
+  assert.equal(c.preparation, "light");
+});

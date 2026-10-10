@@ -256,6 +256,12 @@ function event(s, type, side) {
     side,
     time: s.time,
     technique: s.fencers[side]?.technique,
+    action: s.fencers[side]?.action,
+    line:
+      s.fencers[side]?.action === "parry" || type === "parry"
+        ? s.fencers[side]?.parryLine
+        : s.fencers[side]?.attackLine,
+    distance: Math.abs(s.fencers[0].x - s.fencers[1].x),
     ...(s.contactPoint ? { point: { ...s.contactPoint } } : {}),
   });
   s.contactPoint = null;

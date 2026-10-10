@@ -12,10 +12,12 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage();
-  const errors = [];
+  const errors = [],
+    requests = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.route("**/api/decision", (r) =>
-    r.fulfill({
+  await page.route("**/api/decision", (r) => {
+    requests.push(r.request().postDataJSON());
+    return r.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
         source: "jev",
@@ -29,8 +31,8 @@ try {
         on_heavy: "parry",
         on_opening: "light",
       }),
-    }),
-  );
+    });
+  });
   await page.goto(process.env.GAME_URL || "http://localhost:4318");
   await page.click("#start");
   await page.keyboard.down("d");
@@ -66,6 +68,18 @@ try {
     assert.ok(Math.abs(s.expectedTips[i].x - s.rig[i].tip[0]) < 1e-6);
     assert.ok(Math.abs(s.expectedTips[i].y - s.rig[i].tip[1]) < 1e-6);
   }
+  await page.waitForFunction(() => window.__IRON_VOW__.getState().exchange > 1);
+  await page.waitForTimeout(1200);
+  const latest = requests.at(-1);
+  assert.ok(
+    latest.habits.some(
+      (h) => h.includes("opponent: riposte outside") && h.includes("scored"),
+    ),
+  );
+  assert.ok(latest.habits.some((h) => h.includes("successful parry")));
+  assert.ok(
+    latest.habits.length <= 6 && latest.habits.every((h) => h.length <= 160),
+  );
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({
@@ -74,6 +88,7 @@ try {
       changedLineRiposte: true,
       score: s.score,
       renderedPointsMatch: true,
+      confirmedOutcomesReachNextExchange: true,
       errors,
     }),
   );
