@@ -606,10 +606,7 @@ function finish() {
 }
 const bucket = (n) => (n > 65 ? "high" : n > 30 ? "moderate" : "low");
 async function think() {
-  if (localOnly) {
-    showLocalMode();
-    return;
-  }
+  if (localOnly) return;
   if (pending || mode !== "play" || paused) return;
   pending = true;
   lastBrain = clock;
@@ -877,7 +874,7 @@ function frame(now) {
       accumulator -= 1 / 120;
       simulate(1 / 120);
     }
-    if (clock - lastBrain > (failures ? 3 : 0.65)) think();
+    if (!localOnly && clock - lastBrain > (failures ? 3 : 0.65)) think();
   } else accumulator = 0;
   if (!paused) {
     animateKnight(pVisual, player, enemy, dt);
